@@ -27,6 +27,7 @@ btn.style.borderRadius = "999px";
 btn.style.border = "none";
 btn.style.background = "#6366f1";
 btn.style.color = "white";
+btn.style.zIndex = "2";
 btn.style.opacity = "0.3";
 btn.disabled = true;
 document.body.appendChild(btn);
