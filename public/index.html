@@ -1,65 +1,13 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
-<meta charset="UTF-8" />
-<title>Echohypnose · V0</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-body {
-  margin: 0;
-  background: #0a0a0c;
-  color: #e5e7eb;
-  font-family: system-ui, sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-}
-.app {
-  width: 320px;
-  text-align: center;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.btn {
-  font-size: 28px;
-  padding: 18px 0;
-  background: #111;
-  border: 1px solid #222;
-  border-radius: 12px;
-  cursor: pointer;
-}
-.btn.active {
-  background: #1f2937;
-  box-shadow: 0 0 0 2px #6366f1;
-}
-.sequence {
-  min-height: 40px;
-  font-size: 24px;
-  letter-spacing: 8px;
-  margin-bottom: 20px;
-}
-button.action {
-  padding: 10px 20px;
-  background: #6366f1;
-  border: none;
-  color: white;
-  border-radius: 999px;
-}
-</style>
-</head>
-
-<body>
-<div class="app">
-  <div class="sequence" id="sequence"></div>
-  <div class="grid" id="grid"></div>
-  <button class="action" id="goBtn" disabled>Entrer en résonance</button>
-</div>
-
-<script type="module" src="main.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Echohypnose · Cosmos cocréatif</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="ui-root"></div>
+    <script type="module" src="main.js"></script>
+  </body>
 </html>
