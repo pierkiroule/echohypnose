@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Echohypnose · Admin Sets</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  background: #0a0a0c;
+  color: #e5e7eb;
+  padding: 20px;
+}
+section { margin-bottom: 20px; }
+label { display: block; font-size: 12px; opacity: 0.7; }
+input, select {
+  width: 100%;
+  margin: 6px 0 12px;
+  padding: 8px;
+  background: #111;
+  color: #fff;
+  border: 1px solid #222;
+}
+button {
+  padding: 10px 14px;
+  margin-right: 8px;
+  background: #6366f1;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+pre {
+  background: #111;
+  padding: 10px;
+  font-size: 12px;
+  overflow: auto;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🎛️ Admin · Sets Echohypnose</h2>
+
+<section>
+  <label>Nom du set</label>
+  <input id="label" placeholder="Aurore calme" />
+
+  <label>Music pool (séparé par virgule)</label>
+  <input id="musicPool" placeholder="m01.mp3,m02.mp3" />
+
+  <label>Voice pool</label>
+  <input id="voicePool" placeholder="v01.mp3,v02.mp3" />
+
+  <label>Gain music</label>
+  <input type="range" id="musicGain" min="0" max="1" step="0.01" value="0.5" />
+
+  <label>Gain voice</label>
+  <input type="range" id="voiceGain" min="0" max="1" step="0.01" value="0.7" />
+
+  <label>Animation preset</label>
+  <select id="animPreset">
+    <option value="breath-orb">Breath Orb</option>
+    <option value="particle-cloud">Particle Cloud</option>
+  </select>
+</section>
+
+<section>
+  <button onclick="previewSet()">Prévisualiser</button>
+  <button onclick="installSet()">Installer (activer)</button>
+</section>
+
+<pre id="output"></pre>
+
+<script src="admin.js"></script>
+</body>
+</html>
