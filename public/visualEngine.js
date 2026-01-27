@@ -16,7 +16,7 @@ export function initVisual() {
   canvas = document.createElement("canvas");
   canvas.style.position = "fixed";
   canvas.style.inset = "0";
-  canvas.style.zIndex = "1";
+  canvas.style.zIndex = "0";
   canvas.style.pointerEvents = "none";
   document.body.appendChild(canvas);
 
