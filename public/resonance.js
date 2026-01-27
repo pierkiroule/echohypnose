@@ -48,6 +48,12 @@ export async function initAudio() {
   audioBus.analyser.connect(audioBus.ctx.destination);
 }
 
+export async function resumeAudioContext() {
+  if (!audioBus.ctx) return;
+  if (audioBus.ctx.state === "running") return;
+  await audioBus.ctx.resume();
+}
+
 // ---------- loaders ----------
 async function loadBuffer(url) {
   try {
@@ -203,8 +209,16 @@ export async function triggerResonanceOnce(config = {}) {
     stopAt - 2.0
   );
 
-  setTimeout(() => {
-    try { music.stop(); } catch {}
-    running = false;
-  }, Math.floor(total * 1000));
+  const totalMs = Math.floor(total * 1000);
+
+  return {
+    total,
+    done: new Promise((resolve) => {
+      setTimeout(() => {
+        try { music.stop(); } catch {}
+        running = false;
+        resolve();
+      }, totalMs);
+    })
+  };
 }

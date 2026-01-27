@@ -4,6 +4,10 @@ let canvas, ctx;
 let particles = [];
 let config = null;
 let running = false;
+let fading = false;
+let fadeLevel = 0;
+let lastDpr = window.devicePixelRatio || 1;
+let loopActive = false;
 
 export function initVisual() {
   if (running) return;
@@ -23,6 +27,7 @@ export function initVisual() {
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
+  lastDpr = dpr;
   canvas.width = window.innerWidth * dpr;
   canvas.height = window.innerHeight * dpr;
   canvas.style.width = window.innerWidth + "px";
@@ -33,6 +38,8 @@ function resize() {
 export function triggerVisual(cfg) {
   config = cfg;
   particles = [];
+  fadeLevel = 1;
+  fading = false;
 
   const count = Math.floor(60 * cfg.spread);
 
@@ -46,15 +53,24 @@ export function triggerVisual(cfg) {
     });
   }
 
-  requestAnimationFrame(loop);
+  if (!loopActive) {
+    loopActive = true;
+    requestAnimationFrame(loop);
+  }
 }
 
 function loop() {
-  if (!config) return;
+  if (!config && fadeLevel <= 0) {
+    loopActive = false;
+    return;
+  }
+  if (window.devicePixelRatio !== lastDpr) resize();
 
-  ctx.fillStyle = "rgba(2,6,23,0.08)";
+  const fade = Math.max(0, Math.min(1, fadeLevel));
+  ctx.fillStyle = `rgba(2,6,23,${(0.08 + (1 - fade) * 0.08).toFixed(3)})`;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  if (!config) return;
   ctx.fillStyle = config.color;
 
   particles.forEach(p => {
@@ -62,9 +78,26 @@ function loop() {
     p.y += p.vy;
 
     ctx.beginPath();
+    ctx.globalAlpha = fade;
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
   });
 
+  ctx.globalAlpha = 1;
+
+  if (fading) {
+    fadeLevel -= 0.01;
+    if (fadeLevel <= 0) {
+      fadeLevel = 0;
+      fading = false;
+      config = null;
+      particles = [];
+    }
+  }
+
   requestAnimationFrame(loop);
+}
+
+export function fadeOutVisual() {
+  fading = true;
 }
