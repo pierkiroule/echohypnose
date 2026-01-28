@@ -1,5 +1,4 @@
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
 
 const EMOJI_PROFILES = {
   "🌊": { tempo: 0.35, density: 0.5, drift: 0.8, warmth: 0.3, dispersion: 0.6, orbit: 0.5 },
@@ -230,12 +229,6 @@ export async function startEchohypnosisSession(
   renderer.domElement.style.zIndex = "1";
   renderer.domElement.style.pointerEvents = "auto";
   document.body.appendChild(renderer.domElement);
-  renderer.xr.enabled = true;
-
-  const vrButton = VRButton.createButton(renderer);
-  vrButton.classList.add("vr-toggle");
-  vrButton.textContent = "VR";
-  document.body.appendChild(vrButton);
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x05070f, 6, 22);

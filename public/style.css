@@ -133,19 +133,3 @@ body.session-active #ui-root {
   pointer-events: none;
   z-index: 2;
 }
-
-.vr-toggle {
-  position: fixed !important;
-  bottom: 18px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  padding: 8px 16px !important;
-  border-radius: 999px !important;
-  border: 1px solid rgba(148, 163, 184, 0.5) !important;
-  background: rgba(15, 23, 42, 0.7) !important;
-  color: rgba(226, 232, 240, 0.92) !important;
-  font-size: 12px !important;
-  letter-spacing: 0.2em !important;
-  text-transform: uppercase !important;
-  z-index: 3 !important;
-}
