@@ -100,7 +100,13 @@ export function createCosmos({ emojis, getBounds }) {
     ctx.restore();
   }
 
-  function drawEmojis(ctx, { selection: selectedEmojis, dancePositions, fade = 1, pairs = [] }) {
+  function drawEmojis(ctx, {
+    selection: selectedEmojis,
+    dancePositions,
+    fade = 1,
+    pairs = [],
+    highlightPairs = []
+  }) {
     const selectedSet = new Set(selectedEmojis);
 
     nodes.forEach((node) => {
@@ -134,6 +140,22 @@ export function createCosmos({ emojis, getBounds }) {
       ctx.lineWidth = 2;
       ctx.strokeStyle = `rgba(129, 140, 248, ${0.55 * fade})`;
       pairs.forEach(([aEmoji, bEmoji]) => {
+        const a = nodes.find((item) => item.emoji === aEmoji);
+        const b = nodes.find((item) => item.emoji === bEmoji);
+        if (!a || !b) return;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    if (highlightPairs.length > 0) {
+      ctx.save();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = `rgba(167, 139, 250, ${0.9 * fade})`;
+      highlightPairs.forEach(([aEmoji, bEmoji]) => {
         const a = nodes.find((item) => item.emoji === aEmoji);
         const b = nodes.find((item) => item.emoji === bEmoji);
         if (!a || !b) return;
