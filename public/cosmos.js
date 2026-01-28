@@ -214,15 +214,30 @@ export function createCosmos({ emojis, getBounds }) {
   }
 
   function applyResonance(x, y) {
+    const closest = getClosestEmoji(x, y);
+    if (!closest) return;
+    const node = nodes.find((item) => item.emoji === closest);
+    if (!node) return;
+    const dx = node.x - x;
+    const dy = node.y - y;
+    const dist = Math.max(40, Math.hypot(dx, dy));
+    const force = Math.min(1, 260 / dist);
+    const boost = 140 * force;
+    node.vx += (dx / dist) * boost;
+    node.vy += (dy / dist) * boost;
+  }
+
+  function getClosestEmoji(x, y) {
+    let closest = null;
+    let closestDist = Infinity;
     nodes.forEach((node) => {
-      const dx = node.x - x;
-      const dy = node.y - y;
-      const dist = Math.max(40, Math.hypot(dx, dy));
-      const force = Math.min(1, 260 / dist);
-      const boost = 120 * force;
-      node.vx += (dx / dist) * boost;
-      node.vy += (dy / dist) * boost;
+      const dist = Math.hypot(node.x - x, node.y - y);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = node.emoji;
+      }
     });
+    return closest;
   }
 
   function getTouchingPairs() {
@@ -273,6 +288,7 @@ export function createCosmos({ emojis, getBounds }) {
     setSelection,
     clearSelection,
     applyResonance,
+    getClosestEmoji,
     getTouchingPairs,
     getTouchingTriangle,
     getSelectionPositions

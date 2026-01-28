@@ -49,16 +49,12 @@ function findLockedPair(pairs) {
 function findTriangleFromPair(pairs, pair) {
   if (!pair) return [];
   const [a, b] = pair;
-  const pairSet = new Set(pairs.map((item) => pairKey(item)));
   for (let i = 0; i < pairs.length; i += 1) {
-    const [c1, c2] = pairs[i];
-    const candidate = c1 === a ? c2 : c1 === b ? c2 : c2 === a ? c1 : c2 === b ? c1 : null;
-    if (!candidate) continue;
-    const keyA = pairKey([a, candidate]);
-    const keyB = pairKey([b, candidate]);
-    if (pairSet.has(keyA) && pairSet.has(keyB)) {
-      return [a, b, candidate];
-    }
+    const [p1, p2] = pairs[i];
+    if (p1 === a && p2 !== b) return [a, b, p2];
+    if (p2 === a && p1 !== b) return [a, b, p1];
+    if (p1 === b && p2 !== a) return [a, b, p2];
+    if (p2 === b && p1 !== a) return [a, b, p1];
   }
   return [];
 }
