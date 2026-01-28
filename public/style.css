@@ -23,7 +23,7 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 24px 16px;
+  padding: 16px;
 }
 
 .instruction {
@@ -42,6 +42,113 @@ body.sequence-active .instruction {
   opacity: 0;
 }
 
+.ui-shell {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.constellation-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.7);
+  text-align: center;
+}
+
+.ui-panel {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  padding: 16px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ui-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.ui-status {
+  font-size: 0.9rem;
+  text-align: center;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.emoji-button {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.55);
+  color: inherit;
+  font-size: 1.6rem;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  touch-action: none;
+}
+
+.emoji-button.selected {
+  border-color: rgba(129, 140, 248, 0.8);
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.35);
+  transform: translateY(-2px);
+}
+
+.emoji-button.used {
+  opacity: 0.6;
+}
+
+.emoji-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.action-button {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drag-ghost {
+  position: fixed;
+  inset: auto;
+  pointer-events: none;
+  font-size: 2rem;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+
 canvas.cosmos {
   position: fixed;
   inset: 0;
@@ -51,8 +158,34 @@ canvas.cosmos {
   z-index: 1;
 }
 
-@media (max-width: 600px) {
+@media (min-width: 600px) {
+  #ui-root {
+    padding: 24px;
+  }
+
   .instruction {
-    font-size: 1rem;
+    font-size: 1.15rem;
+  }
+
+  .ui-shell {
+    width: min(100%, 520px);
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .emoji-button {
+    font-size: 1.8rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .ui-shell {
+    width: min(100%, 620px);
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
