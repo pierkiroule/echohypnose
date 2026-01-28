@@ -3,7 +3,8 @@ import {
   clearSelection,
   setInteractionEnabled,
   setResonance,
-  setSessionState
+  setSessionState,
+  setAllowSelection
 } from "./cosmos.js";
 import { createConstellationEngine } from "./constellationEngine.js";
 import { startAgentSimulator } from "./agentSimulator.js";
@@ -25,13 +26,61 @@ root.innerHTML = `
   <div class="ui-shell">
     <div class="ui-top">
       <div class="ui-brand">
-        <h1 class="ui-title">Echohypnoz360•°</h1>
-        <p class="ui-tagline">Rituel du cosmobulle</p>
+        <h1 class="ui-title">EchoHypno•°</h1>
+        <p class="ui-tagline">Rituel narratif cosmique</p>
       </div>
-      <p class="ui-copy">Tapote pour faire résonner le cosmobulle.</p>
+      <p class="ui-copy" id="ui-instruction"></p>
+      <p class="ui-subcopy" id="ui-subcopy"></p>
+    </div>
+    <div class="ui-bottom">
+      <div class="ui-haimoji-label">Haïmoji</div>
+      <div class="ui-haimoji" id="ui-haimoji">• • •</div>
+      <p class="ui-progress" id="ui-progress"></p>
     </div>
   </div>
 `;
+
+const instructionEl = document.getElementById("ui-instruction");
+const subcopyEl = document.getElementById("ui-subcopy");
+const haimojiEl = document.getElementById("ui-haimoji");
+const progressEl = document.getElementById("ui-progress");
+
+const uiState = {
+  awakened: false,
+  selection: [],
+  tapCount: 0,
+  lastTapAt: 0
+};
+
+function formatHaimoji(selection) {
+  if (!selection.length) return "• • •";
+  return selection
+    .concat(Array.from({ length: Math.max(0, 3 - selection.length) }, () => "•"))
+    .join(" ");
+}
+
+function updateUiCopy() {
+  if (!uiState.awakened) {
+    instructionEl.textContent =
+      "Toc toc toc ! Tapez 3 fois ici ou là pour réveiller l'inconscient Cosmoji.";
+    subcopyEl.textContent =
+      "De là émerge la constellation du moment. Laisse-la t'appeler.";
+    progressEl.textContent = `Éveil en cours · ${uiState.tapCount}/3`;
+  } else if (uiState.selection.length < 3) {
+    instructionEl.textContent =
+      "La constellation du moment apparaît. Choisis 3 émojis dans cette trame.";
+    subcopyEl.textContent =
+      "Ils s'alignent et forment le haïmoji : le message secret du Cosmoji.";
+    progressEl.textContent = `Choix en cours · ${uiState.selection.length}/3`;
+  } else {
+    instructionEl.textContent = "Le haïmoji s'aligne. Contemple le message sensoriel.";
+    subcopyEl.textContent = "Le Cosmoji murmure à ton inconscient.";
+    progressEl.textContent = "Transmission en cours · 3/3";
+  }
+  haimojiEl.textContent = formatHaimoji(uiState.selection);
+}
+
+updateUiCopy();
 
 function randomSelection() {
   const pool = [...EMOJIS];
@@ -75,21 +124,22 @@ function pickHypnoEmoji() {
   return nodes[nodes.length - 1].emoji;
 }
 
-async function startHypnoJourney(emoji) {
+async function startHypnoJourney(selection) {
   if (isResonating) return;
   isResonating = true;
   setInteractionEnabled(false);
+  setAllowSelection(false);
 
-  const chosenEmoji = emoji || pickHypnoEmoji();
-  lastHypnoEmoji = chosenEmoji;
-  engine.recordSelection([chosenEmoji]);
+  const chosenSelection = selection?.length ? selection : [pickHypnoEmoji()];
+  lastHypnoEmoji = chosenSelection[chosenSelection.length - 1];
+  engine.recordSelection(chosenSelection);
   refreshConstellation();
 
   setResonance(true);
-  setSessionState({ active: true, selection: [chosenEmoji] });
+  setSessionState({ active: true, selection: chosenSelection });
   document.body.classList.add("session-active");
 
-  currentSession = await startEchohypnosisSession([chosenEmoji], {
+  currentSession = await startEchohypnosisSession(chosenSelection, {
     cycleDuration: SCENE_DURATION,
     onStop: () => {
       document.body.classList.remove("session-active");
@@ -97,23 +147,50 @@ async function startHypnoJourney(emoji) {
       setSessionState({ active: false });
       clearSelection();
       setInteractionEnabled(true);
+      setAllowSelection(false);
       isResonating = false;
       currentSession = null;
+      uiState.awakened = false;
+      uiState.selection = [];
+      uiState.tapCount = 0;
+      updateUiCopy();
     }
   });
 }
 
 function handleResonanceTap() {
   if (isResonating) return;
+  if (!uiState.awakened) {
+    const now = Date.now();
+    if (now - uiState.lastTapAt > 2200) {
+      uiState.tapCount = 0;
+    }
+    uiState.tapCount = Math.min(3, uiState.tapCount + 1);
+    uiState.lastTapAt = now;
+    updateUiCopy();
+  }
   setResonance(true);
 }
 
 initCosmos({
   getConstellation: () => constellationSnapshot,
-  onSelectionChange: () => {},
-  onSelectionComplete: () => {},
+  onSelectionChange: (selection) => {
+    uiState.selection = selection;
+    updateUiCopy();
+  },
+  onSelectionComplete: (selection) => {
+    uiState.selection = selection;
+    updateUiCopy();
+    startHypnoJourney(selection);
+  },
   onResonanceTap: handleResonanceTap,
-  onResonanceComplete: (emoji) => startHypnoJourney(emoji),
+  onResonanceComplete: () => {
+    uiState.awakened = true;
+    uiState.tapCount = 3;
+    updateUiCopy();
+    setAllowSelection(true);
+    setResonance(false);
+  },
   allowSelection: false
 });
 
