@@ -1,4 +1,5 @@
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
 
 const EMOJI_PROFILES = {
   "🌊": { tempo: 0.35, density: 0.5, drift: 0.8, warmth: 0.3, dispersion: 0.6, orbit: 0.5 },
@@ -90,6 +91,50 @@ function computeBands(data) {
   return bands;
 }
 
+function createEmojiTexture(emoji, tint) {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 10, size / 2, size / 2, size / 2);
+  const base = tint.clone().offsetHSL(0, 0, 0.1).getStyle();
+  gradient.addColorStop(0, "rgba(255,255,255,0.9)");
+  gradient.addColorStop(0.5, base);
+  gradient.addColorStop(1, "rgba(5,7,15,0.1)");
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = "140px serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(255,255,255,0.98)";
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 12;
+  ctx.fillText(emoji, size / 2, size / 2 + 6);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createStarfield(rng, count = 400) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const radius = 14;
+  for (let i = 0; i < count; i += 1) {
+    const u = rng();
+    const v = rng();
+    const theta = u * Math.PI * 2;
+    const phi = Math.acos(2 * v - 1);
+    const r = radius - rng() * 2;
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.cos(phi);
+    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({ color: 0x9aa9ff, size: 0.06, transparent: true, opacity: 0.35 });
+  return new THREE.Points(geometry, material);
+}
+
 export async function startEchohypnosisSession(
   emojis,
   { cycleDuration = 60000, onStop = null } = {}
@@ -149,25 +194,37 @@ export async function startEchohypnosisSession(
   renderer.domElement.style.zIndex = "1";
   renderer.domElement.style.pointerEvents = "auto";
   document.body.appendChild(renderer.domElement);
+  renderer.xr.enabled = true;
+
+  const vrButton = VRButton.createButton(renderer);
+  vrButton.classList.add("vr-toggle");
+  vrButton.textContent = "VR";
+  document.body.appendChild(vrButton);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x05070f, 5, 18);
+  scene.fog = new THREE.Fog(0x05070f, 6, 22);
 
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 60);
-  camera.position.set(0, 0.6, 6.5);
+  camera.position.set(0, 0, 0.1);
 
-  const ambient = new THREE.AmbientLight(0x8a9df8, 0.35 + profile.warmth * 0.2);
+  const ambient = new THREE.AmbientLight(0x8a9df8, 0.45 + profile.warmth * 0.2);
   scene.add(ambient);
 
-  const coreLight = new THREE.PointLight(0xffd6a3, 0.6 + profile.warmth * 0.8, 18);
-  coreLight.position.set(0, 1.2, 2.5);
+  const coreLight = new THREE.PointLight(0xffd6a3, 0.8 + profile.warmth * 0.8, 18);
+  coreLight.position.set(0.6, 0.4, 1.6);
   scene.add(coreLight);
+
+  const starfield = createStarfield(rng);
+  scene.add(starfield);
 
   const cluster = new THREE.Group();
   scene.add(cluster);
 
-  const constellation = new THREE.Group();
-  scene.add(constellation);
+  const emojiGroup = new THREE.Group();
+  scene.add(emojiGroup);
+
+  const ringGroup = new THREE.Group();
+  scene.add(ringGroup);
 
   const baseColor = new THREE.Color().setHSL(0.6 - profile.warmth * 0.3, 0.55, 0.6);
   const glowColor = new THREE.Color().setHSL(0.08 + profile.warmth * 0.15, 0.7, 0.65);
@@ -184,9 +241,9 @@ export async function startEchohypnosisSession(
       opacity: 0.65
     });
     const mesh = new THREE.Mesh(geometry, material);
-    const radius = 1.2 + rng() * 2.8 + profile.dispersion * 1.6;
+    const radius = 1.6 + rng() * 3.4 + profile.dispersion * 2.2;
     const angle = rng() * Math.PI * 2;
-    mesh.position.set(Math.cos(angle) * radius, (rng() - 0.5) * 1.8, Math.sin(angle) * radius);
+    mesh.position.set(Math.cos(angle) * radius, (rng() - 0.5) * 2.4, Math.sin(angle) * radius);
     mesh.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
     mesh.userData = {
       spin: new THREE.Vector3((rng() - 0.5) * 0.003, (rng() - 0.5) * 0.004, (rng() - 0.5) * 0.003),
@@ -197,81 +254,62 @@ export async function startEchohypnosisSession(
     organicMeshes.push(mesh);
   }
 
-  const points = [];
-  const radius = 1.4 + profile.orbit * 1.2;
   emojis.slice(0, 3).forEach((emoji, index) => {
-    const angle = (index / 3) * Math.PI * 2 + profile.orbit * 0.6;
-    const x = Math.cos(angle) * radius;
-    const y = 0.4 - index * 0.35;
-    const z = Math.sin(angle) * radius;
-    points.push(new THREE.Vector3(x, y, z));
+    const tint = glowColor.clone().offsetHSL(index * 0.08, 0, 0.1);
+    const texture = createEmojiTexture(emoji, tint);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false })
+    );
+    sprite.scale.set(0.9, 0.9, 1);
 
-    const nodeGeometry = new THREE.SphereGeometry(0.18, 16, 16);
-    const nodeMaterial = new THREE.MeshStandardMaterial({
-      color: glowColor.clone().offsetHSL(index * 0.05, 0, 0.08),
-      emissive: glowColor,
-      emissiveIntensity: 0.6,
-      transparent: true,
-      opacity: 0.9
-    });
-    const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
-    node.position.set(x, y, z);
-    node.userData = { baseScale: 1.0, emoji };
-    constellation.add(node);
+    const bubble = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 32, 32),
+      new THREE.MeshStandardMaterial({
+        color: tint,
+        emissive: tint,
+        emissiveIntensity: 0.3,
+        transparent: true,
+        opacity: 0.25,
+        roughness: 0.1,
+        metalness: 0.2
+      })
+    );
+
+    const node = new THREE.Group();
+    node.add(bubble);
+    node.add(sprite);
+    node.userData = {
+      emoji,
+      orbitRadius: 1.8 + rng() * 1.4,
+      orbitOffset: rng() * Math.PI * 2,
+      orbitSpeed: 0.15 + rng() * 0.2,
+      floatOffset: rng() * Math.PI * 2,
+      baseY: (rng() - 0.5) * 0.8,
+      baseScale: 0.85 + rng() * 0.25
+    };
+    emojiGroup.add(node);
   });
 
-  const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0x9aa9ff, transparent: true, opacity: 0.4 });
-  const line = new THREE.LineLoop(lineGeometry, lineMaterial);
-  constellation.add(line);
-
-  const controlsGroup = new THREE.Group();
-  controlsGroup.position.set(0, -1.9, 2.6);
-  scene.add(controlsGroup);
-
-  const controlColor = new THREE.Color(0x9aa9ff);
-  const controlMaterial = new THREE.MeshStandardMaterial({
-    color: controlColor,
-    emissive: controlColor,
-    emissiveIntensity: 0.4,
-    roughness: 0.4,
-    metalness: 0.1,
-    transparent: true,
-    opacity: 0.7
-  });
-
-  const playShape = new THREE.Shape();
-  playShape.moveTo(-0.18, -0.22);
-  playShape.lineTo(0.22, 0);
-  playShape.lineTo(-0.18, 0.22);
-  playShape.lineTo(-0.18, -0.22);
-  const playMesh = new THREE.Mesh(new THREE.ShapeGeometry(playShape), controlMaterial.clone());
-  playMesh.userData.control = "play";
-  playMesh.position.set(-0.7, 0, 0);
-  controlsGroup.add(playMesh);
-
-  const pauseGroup = new THREE.Group();
-  pauseGroup.userData.control = "pause";
-  const barGeom = new THREE.BoxGeometry(0.12, 0.32, 0.08);
-  const leftBar = new THREE.Mesh(barGeom, controlMaterial.clone());
-  const rightBar = new THREE.Mesh(barGeom, controlMaterial.clone());
-  leftBar.position.set(-0.08, 0, 0);
-  rightBar.position.set(0.08, 0, 0);
-  pauseGroup.add(leftBar, rightBar);
-  controlsGroup.add(pauseGroup);
-
-  const stopMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.08), controlMaterial.clone());
-  stopMesh.userData.control = "stop";
-  stopMesh.position.set(0.7, 0, 0);
-  controlsGroup.add(stopMesh);
-
-  const controlTargets = [playMesh, pauseGroup, stopMesh];
+  const ringCount = 3;
+  for (let i = 0; i < ringCount; i += 1) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.6 + i * 0.65, 0.04, 12, 90),
+      new THREE.MeshBasicMaterial({
+        color: glowColor.clone().offsetHSL(i * 0.04, 0, 0.1),
+        transparent: true,
+        opacity: 0.25,
+        blending: THREE.AdditiveBlending
+      })
+    );
+    ring.rotation.set(Math.PI / 2, rng() * Math.PI, rng() * Math.PI);
+    ring.userData = { spin: 0.0006 + rng() * 0.0008, pulse: 1 + rng() * 0.2 };
+    ringGroup.add(ring);
+  }
 
   const musicData = new Uint8Array(musicAnalyser.frequencyBinCount);
   const voiceData = new Uint8Array(voiceAnalyser.frequencyBinCount);
 
   let active = true;
-  let playing = true;
   const start = performance.now();
 
   function resize() {
@@ -283,42 +321,20 @@ export async function startEchohypnosisSession(
 
   window.addEventListener("resize", resize);
 
-  const raycaster = new THREE.Raycaster();
-  const pointer = new THREE.Vector2();
-
-  function setControlsState(nextPlaying) {
-    playing = nextPlaying;
+  function setAudioState(nextPlaying) {
     const targetGain = nextPlaying ? 0.85 : 0.0001;
     masterGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.25);
-
-    playMesh.material.opacity = nextPlaying ? 0.35 : 0.85;
-    pauseGroup.children.forEach((mesh) => {
-      mesh.material.opacity = nextPlaying ? 0.85 : 0.35;
-    });
   }
 
-  function handlePointer(event) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(controlTargets, true);
-    if (!hits.length) return;
-    const hit = hits[0].object;
-    const control = hit.userData.control || hit.parent?.userData.control;
-    if (control === "play") {
-      setControlsState(true);
-    }
-    if (control === "pause") {
-      setControlsState(false);
-    }
-    if (control === "stop") {
+  function handleExitKey(event) {
+    if (event.key === "Escape") {
       stop();
     }
   }
 
-  renderer.domElement.addEventListener("pointerdown", handlePointer);
-  setControlsState(true);
+  window.addEventListener("keydown", handleExitKey);
+  renderer.domElement.addEventListener("dblclick", stop);
+  setAudioState(true);
 
   function scheduleVoice() {
     if (!active) return;
@@ -361,10 +377,7 @@ export async function startEchohypnosisSession(
     if (!active) return;
 
     const elapsed = performance.now() - start;
-    const cycleT = (elapsed % cycleDuration) / cycleDuration;
-    const entryPhase = clamp01(cycleT / 0.25);
-    const exitPhase = clamp01((cycleT - 0.75) / 0.25);
-    const corePhase = clamp01((cycleT - 0.25) / 0.5);
+    const time = elapsed * 0.001;
 
     musicAnalyser.getByteFrequencyData(musicData);
     voiceAnalyser.getByteFrequencyData(voiceData);
@@ -375,8 +388,8 @@ export async function startEchohypnosisSession(
     const mid = (musicBands.mid + voiceBands.mid) * 0.5;
     const high = (musicBands.high + voiceBands.high) * 0.5;
 
-    cluster.rotation.y += 0.002 + profile.orbit * 0.002 + bass * 0.004;
-    cluster.rotation.x += 0.0008 + mid * 0.002;
+    cluster.rotation.y += 0.0014 + profile.orbit * 0.0015 + bass * 0.003;
+    cluster.rotation.x += 0.0006 + mid * 0.0015;
 
     organicMeshes.forEach((mesh) => {
       mesh.rotation.x += mesh.userData.spin.x * (1 + mid);
@@ -386,39 +399,50 @@ export async function startEchohypnosisSession(
       mesh.position.addScaledVector(mesh.userData.drift, 1 + profile.drift);
       const scale = mesh.userData.baseScale + bass * 0.5 + high * 0.2;
       mesh.scale.setScalar(scale);
-      mesh.material.opacity = 0.15 + entryPhase * 0.55 + corePhase * 0.3 - exitPhase * 0.4;
+      mesh.material.opacity = 0.2 + bass * 0.4 + high * 0.2;
     });
 
-    constellation.children.forEach((node) => {
-      if (!node.material) return;
-      const pulse = 1 + mid * 0.7 + high * 0.5;
-      node.scale.setScalar(node.userData?.baseScale ? node.userData.baseScale * pulse : pulse);
-      node.material.opacity = 0.2 + entryPhase * 0.7 - exitPhase * 0.4;
+    emojiGroup.children.forEach((node) => {
+      const { orbitRadius, orbitOffset, orbitSpeed, floatOffset, baseY, baseScale } = node.userData;
+      const angle = time * orbitSpeed + orbitOffset;
+      const bob = Math.sin(time * 0.9 + floatOffset) * 0.35;
+      node.position.set(Math.cos(angle) * orbitRadius, baseY + bob, Math.sin(angle) * orbitRadius);
+      const pulse = 1 + bass * 0.7 + mid * 0.35;
+      node.scale.setScalar(baseScale * pulse);
+      node.children.forEach((child) => {
+        if (child.material) {
+          child.material.opacity = 0.2 + bass * 0.4 + high * 0.2;
+        }
+      });
     });
 
-    coreLight.intensity = 0.4 + entryPhase * 0.5 + mid * 0.6 - exitPhase * 0.5;
-    ambient.intensity = 0.25 + entryPhase * 0.25 + high * 0.2 - exitPhase * 0.2;
-
-    controlsGroup.rotation.z = Math.sin(elapsed * 0.0008) * 0.15;
-    controlsGroup.position.y = -1.9 + Math.sin(elapsed * 0.0006) * 0.08;
-    controlsGroup.children.forEach((control) => {
-      control.scale.setScalar(1 + bass * 0.12 + mid * 0.06);
+    ringGroup.children.forEach((ring, index) => {
+      ring.rotation.z += ring.userData.spin + index * 0.0002;
+      const pulse = 1 + bass * 0.6 + mid * 0.3;
+      ring.scale.setScalar(ring.userData.pulse * pulse);
+      ring.material.opacity = 0.15 + bass * 0.35 + high * 0.15;
     });
+
+    starfield.rotation.y += 0.0003 + high * 0.0006;
+
+    coreLight.intensity = 0.6 + bass * 0.6 + mid * 0.4;
+    ambient.intensity = 0.35 + high * 0.4;
 
     renderer.render(scene, camera);
-
-    requestAnimationFrame(animate);
   }
 
-  animate();
+  renderer.setAnimationLoop(animate);
 
   function stop() {
     if (!active) return;
     active = false;
     window.removeEventListener("resize", resize);
-    renderer.domElement.removeEventListener("pointerdown", handlePointer);
+    window.removeEventListener("keydown", handleExitKey);
+    renderer.domElement.removeEventListener("dblclick", stop);
+    renderer.setAnimationLoop(null);
     renderer.dispose();
     renderer.domElement.remove();
+    vrButton.remove();
     scene.clear();
     try { musicSource.stop(); } catch {}
     voiceSources.forEach((src) => {
@@ -436,8 +460,8 @@ export async function startEchohypnosisSession(
 
   return {
     stop,
-    pause: () => setControlsState(false),
-    resume: () => setControlsState(true)
+    pause: () => setAudioState(false),
+    resume: () => setAudioState(true)
   };
 }
 

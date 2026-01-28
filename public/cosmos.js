@@ -49,14 +49,14 @@ function ensureNodePosition(emoji) {
   return nodePositions.get(emoji);
 }
 
-function drawStars() {
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
+function drawStars(fade) {
+  ctx.fillStyle = `rgba(255,255,255,${0.8 * fade})`;
   stars.forEach((star) => {
     star.x += star.drift;
     if (star.x < -10) star.x = window.innerWidth + 10;
     if (star.x > window.innerWidth + 10) star.x = -10;
 
-    ctx.globalAlpha = 0.3 + Math.sin(performance.now() * 0.001 + star.x) * 0.2;
+    ctx.globalAlpha = (0.3 + Math.sin(performance.now() * 0.001 + star.x) * 0.2) * fade;
     ctx.beginPath();
     ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
     ctx.fill();
@@ -64,13 +64,12 @@ function drawStars() {
   ctx.globalAlpha = 1;
 }
 
-function drawConstellation(constellation) {
+function drawConstellation(constellation, fade) {
   if (!constellation) return;
 
   constellation.edges.forEach((edge) => {
     const a = ensureNodePosition(edge.a);
     const b = ensureNodePosition(edge.b);
-    const fade = 1 - sessionFade;
     const alpha = (0.12 + edge.normalized * 0.5) * fade;
     ctx.strokeStyle = `rgba(148,163,184,${alpha.toFixed(3)})`;
     ctx.lineWidth = 1 + edge.normalized * 1.5;
@@ -86,14 +85,14 @@ function drawConstellation(constellation) {
     const baseSize = 18 + node.normalized * 22;
     const pulse = (isSelected ? 1.25 : 1) * (1 + node.normalized * 0.15);
     const radius = baseSize * pulse;
-    const fade = isSelected ? 1 : 1 - sessionFade;
+    const nodeFade = fade;
     ctx.save();
     const halo = isSelected ? 0.8 : 0.35;
-    ctx.shadowColor = `rgba(129,140,248,${(0.2 + node.normalized * 0.5 + halo * 0.3) * fade})`;
+    ctx.shadowColor = `rgba(129,140,248,${(0.2 + node.normalized * 0.5 + halo * 0.3) * nodeFade})`;
     ctx.shadowBlur = 10 + node.normalized * 18 + (isSelected ? 18 : 0);
     ctx.beginPath();
-    ctx.fillStyle = `rgba(15,23,42,${0.45 * fade})`;
-    ctx.strokeStyle = `rgba(148,163,184,${(0.5 + node.normalized * 0.4) * fade})`;
+    ctx.fillStyle = `rgba(15,23,42,${0.45 * nodeFade})`;
+    ctx.strokeStyle = `rgba(148,163,184,${(0.5 + node.normalized * 0.4) * nodeFade})`;
     ctx.lineWidth = 1.2 + node.normalized * 1.4;
     ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -102,35 +101,14 @@ function drawConstellation(constellation) {
     ctx.font = `${16 + node.normalized * 8}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = `rgba(226,232,240,${0.9 * fade})`;
+    ctx.fillStyle = `rgba(226,232,240,${0.9 * nodeFade})`;
     ctx.fillText(node.emoji, pos.x, pos.y);
     ctx.restore();
   });
 }
 
-function getSelectionTargets() {
-  const spacing = Math.min(120, window.innerWidth * 0.2);
-  const total = (selectedOrder.length - 1) * spacing;
-  const startX = window.innerWidth / 2 - total / 2;
-  const y = window.innerHeight - 110;
-  return selectedOrder.reduce((acc, emoji, index) => {
-    acc[emoji] = { x: startX + index * spacing, y };
-    return acc;
-  }, {});
-}
-
 function updateNodes() {
-  const targets = sessionFade > 0.01 ? getSelectionTargets() : null;
   nodePositions.forEach((pos, emoji) => {
-    if (targets && targets[emoji]) {
-      const target = targets[emoji];
-      pos.x += (target.x - pos.x) * 0.08;
-      pos.y += (target.y - pos.y) * 0.08;
-      pos.vx *= 0.95;
-      pos.vy *= 0.95;
-      return;
-    }
-
     pos.x += pos.vx;
     pos.y += pos.vy;
     const padding = 40;
@@ -145,14 +123,15 @@ function loop() {
 
   resonanceLevel += (resonanceTarget - resonanceLevel) * 0.05;
   sessionFade += (sessionTarget - sessionFade) * 0.05;
+  const fade = Math.max(0, 1 - sessionFade);
 
-  ctx.fillStyle = `rgba(5,7,15,${0.16 - resonanceLevel * 0.04})`;
+  ctx.fillStyle = `rgba(5,7,15,${(0.16 - resonanceLevel * 0.04) * fade})`;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawStars();
+  drawStars(fade);
   updateNodes();
   lastConstellation = getConstellation ? getConstellation() : { nodes: [], edges: [] };
-  drawConstellation(lastConstellation);
+  drawConstellation(lastConstellation, fade);
 
   requestAnimationFrame(loop);
 }
