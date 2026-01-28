@@ -24,8 +24,19 @@ export function createCosmos({ emojis, getBounds }) {
     createStar(window.innerWidth, window.innerHeight)
   );
   let selection = [];
+  let attractionTargets = new Map();
   let width = window.innerWidth;
   let height = window.innerHeight;
+
+  function toWorldPoint(x, y) {
+    const bounds = getBounds();
+    const scaleX = bounds.width / width;
+    const scaleY = bounds.height / height;
+    return {
+      x: x * scaleX,
+      y: y * scaleY
+    };
+  }
 
   function resize(nextWidth, nextHeight) {
     width = nextWidth;
@@ -35,8 +46,19 @@ export function createCosmos({ emojis, getBounds }) {
 
   function update(dt, now) {
     nodes.forEach((node) => {
-      node.x += node.vx * dt;
-      node.y += node.vy * dt;
+      if (attractionTargets.has(node.emoji)) {
+        const target = attractionTargets.get(node.emoji);
+        const dx = target.x - node.x;
+        const dy = target.y - node.y;
+        const pull = Math.min(1, dt * 4.5);
+        node.x += dx * pull;
+        node.y += dy * pull;
+        node.vx *= 0.6;
+        node.vy *= 0.6;
+      } else {
+        node.x += node.vx * dt;
+        node.y += node.vy * dt;
+      }
       const padding = 30;
       if (node.x < padding || node.x > width - padding) node.vx *= -1;
       if (node.y < padding || node.y > height - padding) node.vy *= -1;
@@ -95,6 +117,7 @@ export function createCosmos({ emojis, getBounds }) {
 
     nodes.forEach((node) => {
       if (selectedSet.has(node.emoji)) return;
+      if (fadeOthers === "hide") return;
       drawEmoji(ctx, node, {
         selected: false,
         faded: fadeOthers,
@@ -118,17 +141,42 @@ export function createCosmos({ emojis, getBounds }) {
         fade
       });
     });
+
+    if (selectedEmojis.length >= 2) {
+      const selectedNodes = selectedEmojis
+        .map((emoji) => nodes.find((item) => item.emoji === emoji))
+        .filter(Boolean);
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = `rgba(129, 140, 248, ${0.65 * fade})`;
+      if (selectedNodes.length === 2) {
+        const [a, b] = selectedNodes;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (dist < 160) {
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      } else if (selectedNodes.length >= 3) {
+        for (let i = 0; i < selectedNodes.length; i += 1) {
+          for (let j = i + 1; j < selectedNodes.length; j += 1) {
+            ctx.beginPath();
+            ctx.moveTo(selectedNodes[i].x, selectedNodes[i].y);
+            ctx.lineTo(selectedNodes[j].x, selectedNodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.restore();
+    }
   }
 
   function hitTest(x, y) {
-    const bounds = getBounds();
-    const scaleX = bounds.width / width;
-    const scaleY = bounds.height / height;
-    const normalizedX = x * scaleX;
-    const normalizedY = y * scaleY;
+    const normalizedPoint = toWorldPoint(x, y);
     let hit = null;
     nodes.forEach((node) => {
-      const dist = Math.hypot(normalizedX - node.x, normalizedY - node.y);
+      const dist = Math.hypot(normalizedPoint.x - node.x, normalizedPoint.y - node.y);
       if (dist < node.size * 0.7) {
         hit = node.emoji;
       }
@@ -143,6 +191,15 @@ export function createCosmos({ emojis, getBounds }) {
     });
   }
 
+  function getClosestEmojis(x, y, count, exclude = new Set()) {
+    return nodes
+      .filter((node) => !exclude.has(node.emoji))
+      .map((node) => ({ emoji: node.emoji, dist: Math.hypot(node.x - x, node.y - y) }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, count)
+      .map((item) => item.emoji);
+  }
+
   function setSelection(nextSelection) {
     selection = nextSelection;
   }
@@ -151,14 +208,26 @@ export function createCosmos({ emojis, getBounds }) {
     selection = [];
   }
 
+  function setAttractionTargets(nextTargets) {
+    attractionTargets = new Map(nextTargets);
+  }
+
+  function clearAttractionTargets() {
+    attractionTargets = new Map();
+  }
+
   return {
     resize,
     update,
     drawBackground,
     drawEmojis,
     hitTest,
+    toWorldPoint,
+    getClosestEmojis,
     setSelection,
     clearSelection,
+    setAttractionTargets,
+    clearAttractionTargets,
     getSelectionPositions
   };
 }

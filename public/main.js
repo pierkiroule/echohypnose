@@ -6,7 +6,7 @@ const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "�
 const SEQUENCE_DURATION = 60000;
 
 const root = document.getElementById("ui-root");
-root.innerHTML = `<div class="instruction">Choisis tes 3 émojis du moment</div>`;
+root.innerHTML = `<div class="instruction">Tape pour attirer les émojis et tracer ta constellation</div>`;
 
 const canvas = document.createElement("canvas");
 canvas.className = "cosmos";
@@ -25,6 +25,8 @@ let selection = [];
 let dance = null;
 let sequenceStart = 0;
 let sequenceActive = false;
+let tapStage = 0;
+let hideOthers = false;
 let lastTime = performance.now();
 
 function resize() {
@@ -60,6 +62,9 @@ function endSequence() {
   dance = null;
   selection = [];
   cosmos.clearSelection();
+  cosmos.clearAttractionTargets();
+  tapStage = 0;
+  hideOthers = false;
   audio.stop();
   document.body.classList.remove("sequence-active");
 }
@@ -69,21 +74,44 @@ function handlePointer(event) {
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
-  const hit = cosmos.hitTest(x, y);
-  if (!hit) return;
+  const tapPoint = cosmos.toWorldPoint(x, y);
 
-  const alreadySelected = selection.includes(hit);
-  if (alreadySelected) {
-    updateSelection(selection.filter((emoji) => emoji !== hit));
+  if (tapStage === 0) {
+    const nearest = cosmos.getClosestEmojis(tapPoint.x, tapPoint.y, 2);
+    if (nearest.length < 2) return;
+    selection = nearest;
+    updateSelection(selection);
+    const offset = 40;
+    const targets = new Map([
+      [nearest[0], { x: tapPoint.x - offset, y: tapPoint.y }],
+      [nearest[1], { x: tapPoint.x + offset, y: tapPoint.y }]
+    ]);
+    cosmos.setAttractionTargets(targets);
+    tapStage = 1;
     return;
   }
 
-  if (selection.length < 3) {
-    const next = [...selection, hit];
-    updateSelection(next);
-    if (next.length === 3) {
-      startSequence();
-    }
+  if (tapStage === 1) {
+    const exclude = new Set(selection);
+    const [closest] = cosmos.getClosestEmojis(tapPoint.x, tapPoint.y, 1, exclude);
+    if (!closest) return;
+    selection = [...selection, closest];
+    updateSelection(selection);
+    hideOthers = true;
+    const radius = 55;
+    const angles = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6];
+    const targets = new Map(
+      selection.map((emoji, index) => [
+        emoji,
+        {
+          x: tapPoint.x + Math.cos(angles[index]) * radius,
+          y: tapPoint.y + Math.sin(angles[index]) * radius
+        }
+      ])
+    );
+    cosmos.setAttractionTargets(targets);
+    tapStage = 2;
+    startSequence();
   }
 }
 
@@ -130,7 +158,7 @@ function tick(now) {
   cosmos.drawEmojis(ctx, {
     selection,
     dancePositions,
-    fadeOthers: selection.length > 0,
+    fadeOthers: hideOthers ? "hide" : selection.length > 0,
     fade
   });
 
