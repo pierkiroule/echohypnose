@@ -1,13 +1,21 @@
-import { initCosmos, clearSelection, setInteractionEnabled, setResonance } from "./cosmos.js";
+import {
+  initCosmos,
+  clearSelection,
+  setInteractionEnabled,
+  setResonance,
+  setSessionState
+} from "./cosmos.js";
 import { createConstellationEngine } from "./constellationEngine.js";
 import { startAgentSimulator } from "./agentSimulator.js";
 import { initVisual } from "./visualEngine.js";
-import { triggerResonance } from "./resonanceEngine.js";
+import { startEchohypnosisSession } from "./echohypnosisSession.js";
 
 const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "🧿", "🪐"];
 const SCENE_DURATION = 60000;
 
 const engine = createConstellationEngine({ emojis: EMOJIS });
+let constellationSnapshot = engine.getConstellation();
+let currentSession = null;
 initVisual();
 
 let isResonating = false;
@@ -25,22 +33,55 @@ root.innerHTML = `
   </div>
 `;
 
+function randomSelection() {
+  const pool = [...EMOJIS];
+  const selection = [];
+  while (selection.length < 3 && pool.length) {
+    const index = Math.floor(Math.random() * pool.length);
+    selection.push(pool.splice(index, 1)[0]);
+  }
+  return selection;
+}
+
+function seedCollectiveGraph(samples = 12) {
+  for (let i = 0; i < samples; i += 1) {
+    engine.recordSelection(randomSelection(), 0.4);
+  }
+}
+
+function refreshConstellation() {
+  seedCollectiveGraph();
+  constellationSnapshot = engine.getConstellation();
+}
+
+refreshConstellation();
+window.setInterval(refreshConstellation, 15 * 60 * 1000);
+
 initCosmos({
-  getConstellation: engine.getConstellation,
+  getConstellation: () => constellationSnapshot,
   onSelectionChange: () => {},
   onSelectionComplete: async (selection) => {
     if (isResonating) return;
     isResonating = true;
     setInteractionEnabled(false);
     engine.recordSelection(selection);
+    refreshConstellation();
     setResonance(true);
+    setSessionState({ active: true, selection });
 
-    await triggerResonance({ duration: SCENE_DURATION, intensity: 0.7 });
-
-    setResonance(false);
-    clearSelection();
-    setInteractionEnabled(true);
-    isResonating = false;
+    document.body.classList.add("session-active");
+    currentSession = await startEchohypnosisSession(selection, {
+      cycleDuration: SCENE_DURATION,
+      onStop: () => {
+        document.body.classList.remove("session-active");
+        setResonance(false);
+        setSessionState({ active: false });
+        clearSelection();
+        setInteractionEnabled(true);
+        isResonating = false;
+        currentSession = null;
+      }
+    });
   }
 });
 

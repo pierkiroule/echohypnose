@@ -6,11 +6,14 @@ let running = false;
 let lastDpr = window.devicePixelRatio || 1;
 let resonanceLevel = 0;
 let resonanceTarget = 0;
+let sessionFade = 0;
+let sessionTarget = 0;
 let getConstellation = null;
 let interactionEnabled = true;
 let onSelectionChange = null;
 let onSelectionComplete = null;
 let selectedEmojis = new Set();
+let selectedOrder = [];
 let lastConstellation = { nodes: [], edges: [] };
 
 const STAR_COUNT = 140;
@@ -39,8 +42,8 @@ function ensureNodePosition(emoji) {
     nodePositions.set(emoji, {
       x: Math.random() * window.innerWidth,
       y: Math.random() * (window.innerHeight * 0.7),
-      vx: (Math.random() - 0.5) * 0.05,
-      vy: (Math.random() - 0.5) * 0.05
+      vx: (Math.random() - 0.5) * 0.015,
+      vy: (Math.random() - 0.5) * 0.015
     });
   }
   return nodePositions.get(emoji);
@@ -67,7 +70,8 @@ function drawConstellation(constellation) {
   constellation.edges.forEach((edge) => {
     const a = ensureNodePosition(edge.a);
     const b = ensureNodePosition(edge.b);
-    const alpha = 0.15 + edge.normalized * 0.4 + resonanceLevel * 0.2;
+    const fade = 1 - sessionFade;
+    const alpha = (0.12 + edge.normalized * 0.5) * fade;
     ctx.strokeStyle = `rgba(148,163,184,${alpha.toFixed(3)})`;
     ctx.lineWidth = 1 + edge.normalized * 1.5;
     ctx.beginPath();
@@ -79,23 +83,56 @@ function drawConstellation(constellation) {
   constellation.nodes.forEach((node) => {
     const pos = ensureNodePosition(node.emoji);
     const isSelected = selectedEmojis.has(node.emoji);
-    const pulse = 1 + node.normalized * 0.8 + resonanceLevel * 0.6 + (isSelected ? 0.4 : 0);
+    const baseSize = 18 + node.normalized * 22;
+    const pulse = (isSelected ? 1.25 : 1) * (1 + node.normalized * 0.15);
+    const radius = baseSize * pulse;
+    const fade = isSelected ? 1 : 1 - sessionFade;
     ctx.save();
-    const glowBoost = isSelected ? 0.3 : 0;
-    ctx.shadowColor = `rgba(129,140,248,${0.4 + node.normalized * 0.4 + glowBoost})`;
-    ctx.shadowBlur = 12 + node.normalized * 18 + (isSelected ? 14 : 0);
-    ctx.font = `${26 * pulse}px serif`;
+    const halo = isSelected ? 0.8 : 0.35;
+    ctx.shadowColor = `rgba(129,140,248,${(0.2 + node.normalized * 0.5 + halo * 0.3) * fade})`;
+    ctx.shadowBlur = 10 + node.normalized * 18 + (isSelected ? 18 : 0);
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(15,23,42,${0.45 * fade})`;
+    ctx.strokeStyle = `rgba(148,163,184,${(0.5 + node.normalized * 0.4) * fade})`;
+    ctx.lineWidth = 1.2 + node.normalized * 1.4;
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = `${16 + node.normalized * 8}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    ctx.fillStyle = `rgba(226,232,240,${0.9 * fade})`;
     ctx.fillText(node.emoji, pos.x, pos.y);
     ctx.restore();
   });
 }
 
+function getSelectionTargets() {
+  const spacing = Math.min(120, window.innerWidth * 0.2);
+  const total = (selectedOrder.length - 1) * spacing;
+  const startX = window.innerWidth / 2 - total / 2;
+  const y = window.innerHeight - 110;
+  return selectedOrder.reduce((acc, emoji, index) => {
+    acc[emoji] = { x: startX + index * spacing, y };
+    return acc;
+  }, {});
+}
+
 function updateNodes() {
-  nodePositions.forEach((pos) => {
-    pos.x += pos.vx * (1 + resonanceLevel * 1.5);
-    pos.y += pos.vy * (1 + resonanceLevel * 1.5);
+  const targets = sessionFade > 0.01 ? getSelectionTargets() : null;
+  nodePositions.forEach((pos, emoji) => {
+    if (targets && targets[emoji]) {
+      const target = targets[emoji];
+      pos.x += (target.x - pos.x) * 0.08;
+      pos.y += (target.y - pos.y) * 0.08;
+      pos.vx *= 0.95;
+      pos.vy *= 0.95;
+      return;
+    }
+
+    pos.x += pos.vx;
+    pos.y += pos.vy;
     const padding = 40;
     if (pos.x < padding || pos.x > window.innerWidth - padding) pos.vx *= -1;
     if (pos.y < padding || pos.y > window.innerHeight * 0.7) pos.vy *= -1;
@@ -107,6 +144,7 @@ function loop() {
   if (window.devicePixelRatio !== lastDpr) resize();
 
   resonanceLevel += (resonanceTarget - resonanceLevel) * 0.05;
+  sessionFade += (sessionTarget - sessionFade) * 0.05;
 
   ctx.fillStyle = `rgba(5,7,15,${0.16 - resonanceLevel * 0.04})`;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -131,7 +169,8 @@ function handlePointer(event) {
   lastConstellation.nodes.forEach((node) => {
     const pos = ensureNodePosition(node.emoji);
     const dist = Math.hypot(x - pos.x, y - pos.y);
-    if (dist < 28) {
+    const radius = 18 + node.normalized * 22;
+    if (dist < radius) {
       hit = node.emoji;
     }
   });
@@ -182,11 +221,17 @@ export function setResonance(active) {
   resonanceTarget = active ? 1 : 0;
 }
 
+export function setSessionState({ active, selection = [] } = {}) {
+  sessionTarget = active ? 1 : 0;
+  selectedOrder = active ? [...selection] : [];
+}
+
 export function setInteractionEnabled(enabled) {
   interactionEnabled = enabled;
 }
 
 export function clearSelection() {
   selectedEmojis = new Set();
+  selectedOrder = [];
   onSelectionChange?.([]);
 }
