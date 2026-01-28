@@ -47,6 +47,8 @@ export function initEmojiGrid({ emojis = [], onSelectionChange, onDrop, onSelect
     dropped: [],
     dragging: null
   };
+  let ignoreClick = false;
+  const DRAG_THRESHOLD = 6;
 
   function updateStatus() {
     const remaining = Math.max(0, state.selected.length - state.dropped.length);
@@ -93,18 +95,31 @@ export function initEmojiGrid({ emojis = [], onSelectionChange, onDrop, onSelect
 
   function onPointerDown(event, emoji, button) {
     event.preventDefault();
-    if (!state.selected.includes(emoji)) {
-      if (state.selected.length >= 3) return;
-      state.selected.push(emoji);
-      button.classList.add("selected");
-    }
-
-    if (state.dropped.includes(emoji)) return;
-
-    const ghost = createGhost(emoji);
-    state.dragging = { emoji, ghost };
-
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let dragging = false;
+    let ghost = null;
     const move = (moveEvent) => {
+      if (!dragging) {
+        const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+        if (distance < DRAG_THRESHOLD) return;
+
+        if (!state.selected.includes(emoji)) {
+          if (state.selected.length >= 3) return;
+          state.selected.push(emoji);
+          button.classList.add("selected");
+        }
+
+        if (state.dropped.includes(emoji)) return;
+
+        ghost = createGhost(emoji);
+        state.dragging = { emoji, ghost };
+        dragging = true;
+        setButtonState();
+        notifySelection();
+      }
+
+      if (!ghost) return;
       ghost.style.left = `${moveEvent.clientX}px`;
       ghost.style.top = `${moveEvent.clientY}px`;
     };
@@ -112,6 +127,16 @@ export function initEmojiGrid({ emojis = [], onSelectionChange, onDrop, onSelect
     const up = (upEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      ignoreClick = true;
+      setTimeout(() => {
+        ignoreClick = false;
+      }, 0);
+
+      if (!dragging) {
+        toggleEmoji(emoji, button);
+        return;
+      }
+
       ghost.remove();
 
       const gridRect = panel.getBoundingClientRect();
@@ -138,10 +163,6 @@ export function initEmojiGrid({ emojis = [], onSelectionChange, onDrop, onSelect
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up, { once: true });
-    move(event);
-
-    setButtonState();
-    notifySelection();
   }
 
   emojis.forEach((emoji) => {
@@ -151,6 +172,10 @@ export function initEmojiGrid({ emojis = [], onSelectionChange, onDrop, onSelect
     button.type = "button";
 
     button.addEventListener("click", () => {
+      if (ignoreClick) {
+        ignoreClick = false;
+        return;
+      }
       if (state.dragging) return;
       toggleEmoji(emoji, button);
     });
