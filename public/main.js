@@ -24,8 +24,12 @@ const root = document.getElementById("ui-root");
 root.innerHTML = `
   <div class="ui-shell">
     <div class="ui-top">
-      <p>Bienvenue dans l'inconscient échohypnotique.</p>
-      <p>Voici ce que les membres du collectif font résonner actuellement.</p>
+      <div class="ui-brand">
+        <h1 class="ui-title">Echohypno•°</h1>
+        <p class="ui-tagline">Laisser résonner l'inconscient partagé</p>
+      </div>
+      <p class="ui-copy">Bienvenue dans l'inconscient échohypnotique.</p>
+      <p class="ui-copy">Voici ce que les membres du collectif font résonner actuellement.</p>
     </div>
     <div class="ui-bottom">
       Sélectionne 3 émojis qui t'inspirent, te guident et résonnent pour toi ici et maintenant.

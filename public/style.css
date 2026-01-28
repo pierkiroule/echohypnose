@@ -46,7 +46,32 @@ body.session-active #ui-root {
   pointer-events: none;
 }
 
-.ui-top p {
+.ui-brand {
+  margin-bottom: 10px;
+}
+
+.ui-title {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(188, 210, 255, 0.75));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 10px 30px rgba(71, 99, 255, 0.22);
+}
+
+.ui-tagline {
+  margin: 8px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(205, 219, 255, 0.78);
+}
+
+.ui-copy {
   margin: 0 0 6px;
 }
 
