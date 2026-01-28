@@ -25,14 +25,10 @@ root.innerHTML = `
   <div class="ui-shell">
     <div class="ui-top">
       <div class="ui-brand">
-        <h1 class="ui-title">Echohypno•°</h1>
-        <p class="ui-tagline">Laisser résonner l'inconscient partagé</p>
+        <h1 class="ui-title">Echohypnoz360•°</h1>
+        <p class="ui-tagline">Rituel du cosmobulle</p>
       </div>
-      <p class="ui-copy">Bienvenue dans l'inconscient échohypnotique.</p>
-      <p class="ui-copy">Voici ce que les membres du collectif font résonner actuellement.</p>
-    </div>
-    <div class="ui-bottom">
-      Sélectionne 3 émojis qui t'inspirent, te guident et résonnent pour toi ici et maintenant.
+      <p class="ui-copy">Tapote pour faire résonner le cosmobulle.</p>
     </div>
   </div>
 `;
@@ -61,32 +57,64 @@ function refreshConstellation() {
 refreshConstellation();
 window.setInterval(refreshConstellation, 15 * 60 * 1000);
 
+let lastHypnoEmoji = null;
+
+function pickHypnoEmoji() {
+  const nodes = constellationSnapshot?.nodes || [];
+  if (!nodes.length) return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+  const weights = nodes.map((node) => {
+    const bias = node.emoji === lastHypnoEmoji ? 0.4 : 0;
+    return Math.max(0.15, node.normalized + 0.35 - bias);
+  });
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let roll = Math.random() * total;
+  for (let i = 0; i < nodes.length; i += 1) {
+    roll -= weights[i];
+    if (roll <= 0) return nodes[i].emoji;
+  }
+  return nodes[nodes.length - 1].emoji;
+}
+
+async function startHypnoJourney(emoji) {
+  if (isResonating) return;
+  isResonating = true;
+  setInteractionEnabled(false);
+
+  const chosenEmoji = emoji || pickHypnoEmoji();
+  lastHypnoEmoji = chosenEmoji;
+  engine.recordSelection([chosenEmoji]);
+  refreshConstellation();
+
+  setResonance(true);
+  setSessionState({ active: true, selection: [chosenEmoji] });
+  document.body.classList.add("session-active");
+
+  currentSession = await startEchohypnosisSession([chosenEmoji], {
+    cycleDuration: SCENE_DURATION,
+    onStop: () => {
+      document.body.classList.remove("session-active");
+      setResonance(false);
+      setSessionState({ active: false });
+      clearSelection();
+      setInteractionEnabled(true);
+      isResonating = false;
+      currentSession = null;
+    }
+  });
+}
+
+function handleResonanceTap() {
+  if (isResonating) return;
+  setResonance(true);
+}
+
 initCosmos({
   getConstellation: () => constellationSnapshot,
   onSelectionChange: () => {},
-  onSelectionComplete: async (selection) => {
-    if (isResonating) return;
-    isResonating = true;
-    setInteractionEnabled(false);
-    engine.recordSelection(selection);
-    refreshConstellation();
-    setResonance(true);
-    setSessionState({ active: true, selection });
-
-    document.body.classList.add("session-active");
-    currentSession = await startEchohypnosisSession(selection, {
-      cycleDuration: SCENE_DURATION,
-      onStop: () => {
-        document.body.classList.remove("session-active");
-        setResonance(false);
-        setSessionState({ active: false });
-        clearSelection();
-        setInteractionEnabled(true);
-        isResonating = false;
-        currentSession = null;
-      }
-    });
-  }
+  onSelectionComplete: () => {},
+  onResonanceTap: handleResonanceTap,
+  onResonanceComplete: (emoji) => startHypnoJourney(emoji),
+  allowSelection: false
 });
 
 startAgentSimulator({

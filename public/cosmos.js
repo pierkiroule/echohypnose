@@ -12,11 +12,20 @@ let getConstellation = null;
 let interactionEnabled = true;
 let onSelectionChange = null;
 let onSelectionComplete = null;
+let onResonanceTap = null;
+let onResonanceComplete = null;
+let allowSelection = true;
+let resonancePulse = 0;
+let resonanceWaves = [];
+let resonanceReady = false;
+let lastTapTime = 0;
 let selectedEmojis = new Set();
 let selectedOrder = [];
 let lastConstellation = { nodes: [], edges: [] };
 
 const STAR_COUNT = 140;
+const RESONANCE_TAP_COUNT = 3;
+const RESONANCE_COLORS = ["rgba(129,140,248,", "rgba(248,205,129,", "rgba(125,211,252,"];
 
 function createStar() {
   return {
@@ -49,14 +58,14 @@ function ensureNodePosition(emoji) {
   return nodePositions.get(emoji);
 }
 
-function drawStars() {
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
+function drawStars(fade) {
+  ctx.fillStyle = `rgba(255,255,255,${0.8 * fade})`;
   stars.forEach((star) => {
     star.x += star.drift;
     if (star.x < -10) star.x = window.innerWidth + 10;
     if (star.x > window.innerWidth + 10) star.x = -10;
 
-    ctx.globalAlpha = 0.3 + Math.sin(performance.now() * 0.001 + star.x) * 0.2;
+    ctx.globalAlpha = (0.3 + Math.sin(performance.now() * 0.001 + star.x) * 0.2) * fade;
     ctx.beginPath();
     ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
     ctx.fill();
@@ -64,13 +73,12 @@ function drawStars() {
   ctx.globalAlpha = 1;
 }
 
-function drawConstellation(constellation) {
+function drawConstellation(constellation, fade) {
   if (!constellation) return;
 
   constellation.edges.forEach((edge) => {
     const a = ensureNodePosition(edge.a);
     const b = ensureNodePosition(edge.b);
-    const fade = 1 - sessionFade;
     const alpha = (0.12 + edge.normalized * 0.5) * fade;
     ctx.strokeStyle = `rgba(148,163,184,${alpha.toFixed(3)})`;
     ctx.lineWidth = 1 + edge.normalized * 1.5;
@@ -85,15 +93,15 @@ function drawConstellation(constellation) {
     const isSelected = selectedEmojis.has(node.emoji);
     const baseSize = 18 + node.normalized * 22;
     const pulse = (isSelected ? 1.25 : 1) * (1 + node.normalized * 0.15);
-    const radius = baseSize * pulse;
-    const fade = isSelected ? 1 : 1 - sessionFade;
+    const radius = baseSize * pulse * (1 + resonancePulse * 0.12);
+    const nodeFade = fade;
     ctx.save();
     const halo = isSelected ? 0.8 : 0.35;
-    ctx.shadowColor = `rgba(129,140,248,${(0.2 + node.normalized * 0.5 + halo * 0.3) * fade})`;
+    ctx.shadowColor = `rgba(129,140,248,${(0.2 + node.normalized * 0.5 + halo * 0.3) * nodeFade})`;
     ctx.shadowBlur = 10 + node.normalized * 18 + (isSelected ? 18 : 0);
     ctx.beginPath();
-    ctx.fillStyle = `rgba(15,23,42,${0.45 * fade})`;
-    ctx.strokeStyle = `rgba(148,163,184,${(0.5 + node.normalized * 0.4) * fade})`;
+    ctx.fillStyle = `rgba(15,23,42,${0.45 * nodeFade})`;
+    ctx.strokeStyle = `rgba(148,163,184,${(0.5 + node.normalized * 0.4) * nodeFade})`;
     ctx.lineWidth = 1.2 + node.normalized * 1.4;
     ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -102,35 +110,14 @@ function drawConstellation(constellation) {
     ctx.font = `${16 + node.normalized * 8}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = `rgba(226,232,240,${0.9 * fade})`;
+    ctx.fillStyle = `rgba(226,232,240,${0.9 * nodeFade})`;
     ctx.fillText(node.emoji, pos.x, pos.y);
     ctx.restore();
   });
 }
 
-function getSelectionTargets() {
-  const spacing = Math.min(120, window.innerWidth * 0.2);
-  const total = (selectedOrder.length - 1) * spacing;
-  const startX = window.innerWidth / 2 - total / 2;
-  const y = window.innerHeight - 110;
-  return selectedOrder.reduce((acc, emoji, index) => {
-    acc[emoji] = { x: startX + index * spacing, y };
-    return acc;
-  }, {});
-}
-
 function updateNodes() {
-  const targets = sessionFade > 0.01 ? getSelectionTargets() : null;
   nodePositions.forEach((pos, emoji) => {
-    if (targets && targets[emoji]) {
-      const target = targets[emoji];
-      pos.x += (target.x - pos.x) * 0.08;
-      pos.y += (target.y - pos.y) * 0.08;
-      pos.vx *= 0.95;
-      pos.vy *= 0.95;
-      return;
-    }
-
     pos.x += pos.vx;
     pos.y += pos.vy;
     const padding = 40;
@@ -139,27 +126,83 @@ function updateNodes() {
   });
 }
 
+function drawResonanceWaves(now) {
+  resonanceWaves = resonanceWaves.filter((wave) => now - wave.start < 5000);
+  resonanceWaves.forEach((wave) => {
+    wave.x += wave.vx;
+    wave.y += wave.vy;
+    if (wave.x < 40 || wave.x > window.innerWidth - 40) wave.vx *= -1;
+    if (wave.y < 40 || wave.y > window.innerHeight - 40) wave.vy *= -1;
+
+    const elapsed = now - wave.start;
+    wave.radius = Math.min(Math.max(window.innerWidth, window.innerHeight) * 1.2, elapsed * 0.18);
+    const alpha = Math.max(0, 0.6 - elapsed / 4500);
+    ctx.strokeStyle = `${wave.color}${alpha})`;
+    ctx.lineWidth = 1.5 + wave.index * 0.6;
+    ctx.beginPath();
+    ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+}
+
+function resolveResonanceChoice() {
+  if (!resonanceWaves.length || !lastConstellation?.nodes?.length) return null;
+  let bestEmoji = null;
+  let bestScore = -Infinity;
+  lastConstellation.nodes.forEach((node) => {
+    const pos = ensureNodePosition(node.emoji);
+    const score = resonanceWaves.reduce((sum, wave) => {
+      const dist = Math.hypot(pos.x - wave.x, pos.y - wave.y);
+      const ripple = Math.max(0, 1 - Math.abs(dist - wave.radius) / 140);
+      return sum + ripple;
+    }, 0);
+    const weightedScore = score + node.normalized * 0.4;
+    if (weightedScore > bestScore) {
+      bestScore = weightedScore;
+      bestEmoji = node.emoji;
+    }
+  });
+  return bestEmoji;
+}
+
 function loop() {
   if (!running) return;
   if (window.devicePixelRatio !== lastDpr) resize();
 
+  const now = performance.now();
   resonanceLevel += (resonanceTarget - resonanceLevel) * 0.05;
   sessionFade += (sessionTarget - sessionFade) * 0.05;
+  resonancePulse *= 0.92;
+  const fade = Math.max(0, 1 - sessionFade);
 
-  ctx.fillStyle = `rgba(5,7,15,${0.16 - resonanceLevel * 0.04})`;
+  ctx.fillStyle = `rgba(5,7,15,${(0.16 - resonanceLevel * 0.04) * fade})`;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawStars();
+  drawStars(fade);
   updateNodes();
   lastConstellation = getConstellation ? getConstellation() : { nodes: [], edges: [] };
-  drawConstellation(lastConstellation);
+  drawConstellation(lastConstellation, fade);
+  drawResonanceWaves(now);
+
+  if (resonanceReady && now - lastTapTime > 650) {
+    const choice = resolveResonanceChoice();
+    if (choice) {
+      onResonanceComplete?.(choice);
+    }
+    resonanceReady = false;
+    resonanceWaves = [];
+  }
 
   requestAnimationFrame(loop);
 }
 
 function handlePointer(event) {
   if (!interactionEnabled) return;
-  if (!lastConstellation?.nodes?.length) return;
+  if (!lastConstellation?.nodes?.length) {
+    onResonanceTap?.();
+    resonancePulse = 1;
+    return;
+  }
 
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -175,31 +218,59 @@ function handlePointer(event) {
     }
   });
 
-  if (!hit) return;
+  if (hit && allowSelection) {
+    if (selectedEmojis.has(hit)) {
+      selectedEmojis.delete(hit);
+    } else if (selectedEmojis.size < 3) {
+      selectedEmojis.add(hit);
+    }
 
-  if (selectedEmojis.has(hit)) {
-    selectedEmojis.delete(hit);
-  } else if (selectedEmojis.size < 3) {
-    selectedEmojis.add(hit);
+    const selection = [...selectedEmojis];
+    onSelectionChange?.(selection);
+    if (selection.length === 3) {
+      onSelectionComplete?.(selection);
+    }
   }
 
-  const selection = [...selectedEmojis];
-  onSelectionChange?.(selection);
-  if (selection.length === 3) {
-    onSelectionComplete?.(selection);
+  if (!allowSelection) {
+    if (resonanceWaves.length < RESONANCE_TAP_COUNT) {
+      resonanceWaves.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 0.9,
+        vy: (Math.random() - 0.5) * 0.9,
+        radius: 0,
+        start: performance.now(),
+        index: resonanceWaves.length,
+        color: RESONANCE_COLORS[resonanceWaves.length % RESONANCE_COLORS.length]
+      });
+      lastTapTime = performance.now();
+      if (resonanceWaves.length === RESONANCE_TAP_COUNT) {
+        resonanceReady = true;
+      }
+    }
   }
+
+  onResonanceTap?.({ emoji: hit, x, y });
+  resonancePulse = 1;
 }
 
 export function initCosmos({
   getConstellation: getConstellationFn,
   onSelectionChange: onSelectionChangeFn,
-  onSelectionComplete: onSelectionCompleteFn
+  onSelectionComplete: onSelectionCompleteFn,
+  onResonanceTap: onResonanceTapFn,
+  onResonanceComplete: onResonanceCompleteFn,
+  allowSelection: allowSelectionValue = true
 }) {
   if (running) return;
   running = true;
   getConstellation = getConstellationFn;
   onSelectionChange = onSelectionChangeFn;
   onSelectionComplete = onSelectionCompleteFn;
+  onResonanceTap = onResonanceTapFn;
+  onResonanceComplete = onResonanceCompleteFn;
+  allowSelection = allowSelectionValue;
 
   canvas = document.createElement("canvas");
   canvas.style.position = "fixed";
