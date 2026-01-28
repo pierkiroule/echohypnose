@@ -2,7 +2,7 @@ import { initCosmos, clearSelection, setInteractionEnabled, setResonance } from 
 import { createConstellationEngine } from "./constellationEngine.js";
 import { startAgentSimulator } from "./agentSimulator.js";
 import { initVisual } from "./visualEngine.js";
-import { triggerResonance } from "./resonanceEngine.js";
+import { startEchohypnosisSession } from "./echohypnosisSession.js";
 
 const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "🧿", "🪐"];
 const SCENE_DURATION = 60000;
@@ -35,7 +35,10 @@ initCosmos({
     engine.recordSelection(selection);
     setResonance(true);
 
-    await triggerResonance({ duration: SCENE_DURATION, intensity: 0.7 });
+    document.body.classList.add("session-active");
+    const session = await startEchohypnosisSession(selection, { duration: SCENE_DURATION });
+    await session.done;
+    document.body.classList.remove("session-active");
 
     setResonance(false);
     clearSelection();
