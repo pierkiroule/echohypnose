@@ -33,7 +33,24 @@ root.innerHTML = `
   </div>
 `;
 
+function randomSelection() {
+  const pool = [...EMOJIS];
+  const selection = [];
+  while (selection.length < 3 && pool.length) {
+    const index = Math.floor(Math.random() * pool.length);
+    selection.push(pool.splice(index, 1)[0]);
+  }
+  return selection;
+}
+
+function seedCollectiveGraph(samples = 12) {
+  for (let i = 0; i < samples; i += 1) {
+    engine.recordSelection(randomSelection(), 0.4);
+  }
+}
+
 function refreshConstellation() {
+  seedCollectiveGraph();
   constellationSnapshot = engine.getConstellation();
 }
 
