@@ -13,13 +13,19 @@ let interactionEnabled = true;
 let onSelectionChange = null;
 let onSelectionComplete = null;
 let onResonanceTap = null;
+let onResonanceComplete = null;
 let allowSelection = true;
 let resonancePulse = 0;
+let resonanceWaves = [];
+let resonanceReady = false;
+let lastTapTime = 0;
 let selectedEmojis = new Set();
 let selectedOrder = [];
 let lastConstellation = { nodes: [], edges: [] };
 
 const STAR_COUNT = 140;
+const RESONANCE_TAP_COUNT = 3;
+const RESONANCE_COLORS = ["rgba(129,140,248,", "rgba(248,205,129,", "rgba(125,211,252,"];
 
 function createStar() {
   return {
@@ -120,10 +126,50 @@ function updateNodes() {
   });
 }
 
+function drawResonanceWaves(now) {
+  resonanceWaves = resonanceWaves.filter((wave) => now - wave.start < 5000);
+  resonanceWaves.forEach((wave) => {
+    wave.x += wave.vx;
+    wave.y += wave.vy;
+    if (wave.x < 40 || wave.x > window.innerWidth - 40) wave.vx *= -1;
+    if (wave.y < 40 || wave.y > window.innerHeight - 40) wave.vy *= -1;
+
+    const elapsed = now - wave.start;
+    wave.radius = Math.min(Math.max(window.innerWidth, window.innerHeight) * 1.2, elapsed * 0.18);
+    const alpha = Math.max(0, 0.6 - elapsed / 4500);
+    ctx.strokeStyle = `${wave.color}${alpha})`;
+    ctx.lineWidth = 1.5 + wave.index * 0.6;
+    ctx.beginPath();
+    ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+}
+
+function resolveResonanceChoice() {
+  if (!resonanceWaves.length || !lastConstellation?.nodes?.length) return null;
+  let bestEmoji = null;
+  let bestScore = -Infinity;
+  lastConstellation.nodes.forEach((node) => {
+    const pos = ensureNodePosition(node.emoji);
+    const score = resonanceWaves.reduce((sum, wave) => {
+      const dist = Math.hypot(pos.x - wave.x, pos.y - wave.y);
+      const ripple = Math.max(0, 1 - Math.abs(dist - wave.radius) / 140);
+      return sum + ripple;
+    }, 0);
+    const weightedScore = score + node.normalized * 0.4;
+    if (weightedScore > bestScore) {
+      bestScore = weightedScore;
+      bestEmoji = node.emoji;
+    }
+  });
+  return bestEmoji;
+}
+
 function loop() {
   if (!running) return;
   if (window.devicePixelRatio !== lastDpr) resize();
 
+  const now = performance.now();
   resonanceLevel += (resonanceTarget - resonanceLevel) * 0.05;
   sessionFade += (sessionTarget - sessionFade) * 0.05;
   resonancePulse *= 0.92;
@@ -136,6 +182,16 @@ function loop() {
   updateNodes();
   lastConstellation = getConstellation ? getConstellation() : { nodes: [], edges: [] };
   drawConstellation(lastConstellation, fade);
+  drawResonanceWaves(now);
+
+  if (resonanceReady && now - lastTapTime > 650) {
+    const choice = resolveResonanceChoice();
+    if (choice) {
+      onResonanceComplete?.(choice);
+    }
+    resonanceReady = false;
+    resonanceWaves = [];
+  }
 
   requestAnimationFrame(loop);
 }
@@ -176,7 +232,26 @@ function handlePointer(event) {
     }
   }
 
-  onResonanceTap?.(hit);
+  if (!allowSelection) {
+    if (resonanceWaves.length < RESONANCE_TAP_COUNT) {
+      resonanceWaves.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 0.9,
+        vy: (Math.random() - 0.5) * 0.9,
+        radius: 0,
+        start: performance.now(),
+        index: resonanceWaves.length,
+        color: RESONANCE_COLORS[resonanceWaves.length % RESONANCE_COLORS.length]
+      });
+      lastTapTime = performance.now();
+      if (resonanceWaves.length === RESONANCE_TAP_COUNT) {
+        resonanceReady = true;
+      }
+    }
+  }
+
+  onResonanceTap?.({ emoji: hit, x, y });
   resonancePulse = 1;
 }
 
@@ -185,6 +260,7 @@ export function initCosmos({
   onSelectionChange: onSelectionChangeFn,
   onSelectionComplete: onSelectionCompleteFn,
   onResonanceTap: onResonanceTapFn,
+  onResonanceComplete: onResonanceCompleteFn,
   allowSelection: allowSelectionValue = true
 }) {
   if (running) return;
@@ -193,6 +269,7 @@ export function initCosmos({
   onSelectionChange = onSelectionChangeFn;
   onSelectionComplete = onSelectionCompleteFn;
   onResonanceTap = onResonanceTapFn;
+  onResonanceComplete = onResonanceCompleteFn;
   allowSelection = allowSelectionValue;
 
   canvas = document.createElement("canvas");

@@ -12,9 +12,6 @@ import { startEchohypnosisSession } from "./echohypnosisSession.js";
 
 const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "🧿", "🪐"];
 const SCENE_DURATION = 60000;
-const RESONANCE_THRESHOLD = 4.5;
-const RESONANCE_DECAY = 0.02;
-const RESONANCE_RELEASE_MS = 900;
 
 const engine = createConstellationEngine({ emojis: EMOJIS });
 let constellationSnapshot = engine.getConstellation();
@@ -60,8 +57,6 @@ function refreshConstellation() {
 refreshConstellation();
 window.setInterval(refreshConstellation, 15 * 60 * 1000);
 
-let resonanceEnergy = 0;
-let lastTap = 0;
 let lastHypnoEmoji = null;
 
 function pickHypnoEmoji() {
@@ -80,21 +75,21 @@ function pickHypnoEmoji() {
   return nodes[nodes.length - 1].emoji;
 }
 
-async function startHypnoJourney() {
+async function startHypnoJourney(emoji) {
   if (isResonating) return;
   isResonating = true;
   setInteractionEnabled(false);
 
-  const emoji = pickHypnoEmoji();
-  lastHypnoEmoji = emoji;
-  engine.recordSelection([emoji]);
+  const chosenEmoji = emoji || pickHypnoEmoji();
+  lastHypnoEmoji = chosenEmoji;
+  engine.recordSelection([chosenEmoji]);
   refreshConstellation();
 
   setResonance(true);
-  setSessionState({ active: true, selection: [emoji] });
+  setSessionState({ active: true, selection: [chosenEmoji] });
   document.body.classList.add("session-active");
 
-  currentSession = await startEchohypnosisSession([emoji], {
+  currentSession = await startEchohypnosisSession([chosenEmoji], {
     cycleDuration: SCENE_DURATION,
     onStop: () => {
       document.body.classList.remove("session-active");
@@ -110,9 +105,6 @@ async function startHypnoJourney() {
 
 function handleResonanceTap() {
   if (isResonating) return;
-  const now = performance.now();
-  lastTap = now;
-  resonanceEnergy = Math.min(RESONANCE_THRESHOLD * 1.5, resonanceEnergy + 0.85);
   setResonance(true);
 }
 
@@ -121,27 +113,9 @@ initCosmos({
   onSelectionChange: () => {},
   onSelectionComplete: () => {},
   onResonanceTap: handleResonanceTap,
+  onResonanceComplete: (emoji) => startHypnoJourney(emoji),
   allowSelection: false
 });
-
-function resonanceLoop() {
-  if (!isResonating) {
-    resonanceEnergy = Math.max(0, resonanceEnergy - RESONANCE_DECAY);
-    if (resonanceEnergy < 0.2) {
-      setResonance(false);
-    }
-    if (resonanceEnergy >= RESONANCE_THRESHOLD) {
-      const sinceLastTap = performance.now() - lastTap;
-      if (sinceLastTap > RESONANCE_RELEASE_MS) {
-        resonanceEnergy = 0;
-        startHypnoJourney();
-      }
-    }
-  }
-  requestAnimationFrame(resonanceLoop);
-}
-
-resonanceLoop();
 
 startAgentSimulator({
   emojis: EMOJIS,
