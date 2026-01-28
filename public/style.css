@@ -1,56 +1,68 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: #0a0a0c;
-  color: rgba(255,255,255,0.85);
   height: 100%;
+  background: #05070f;
+  color: rgba(255, 255, 255, 0.92);
   overflow: hidden;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
-canvas { display: block; }
+canvas {
+  display: block;
+}
 
-#hud {
+#ui-root {
   position: fixed;
-  left: 0; right: 0;
-  top: 0;
-  padding: 10px;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ui-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   pointer-events: none;
 }
 
-#hud .row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-}
-
-select, button {
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.9);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  padding: 10px 12px;
+.ui-top {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90vw);
+  text-align: center;
   font-size: 14px;
-  outline: none;
-}
-
-button {
-  cursor: pointer;
-  user-select: none;
-}
-
-button:active {
-  transform: translateY(1px);
-}
-
-.meta {
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-  opacity: 0.6;
-  font-size: 12px;
-  padding: 0 6px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
   pointer-events: none;
+}
+
+.ui-top p {
+  margin: 0 0 6px;
+}
+
+.ui-bottom {
+  padding: 18px 18px 26px;
+  text-align: center;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.82);
+  background: linear-gradient(180deg, rgba(5, 7, 15, 0) 0%, rgba(5, 7, 15, 0.55) 40%, rgba(5, 7, 15, 0.9) 100%);
+  pointer-events: none;
+}
+
+.constellation-label {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 2;
 }
