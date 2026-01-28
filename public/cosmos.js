@@ -301,6 +301,10 @@ export function setInteractionEnabled(enabled) {
   interactionEnabled = enabled;
 }
 
+export function setAllowSelection(enabled) {
+  allowSelection = enabled;
+}
+
 export function clearSelection() {
   selectedEmojis = new Set();
   selectedOrder = [];
