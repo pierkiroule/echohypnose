@@ -1,13 +1,17 @@
 let canvas;
 let ctx;
 let stars = [];
-let drops = [];
 let nodePositions = new Map();
 let running = false;
 let lastDpr = window.devicePixelRatio || 1;
 let resonanceLevel = 0;
 let resonanceTarget = 0;
 let getConstellation = null;
+let interactionEnabled = true;
+let onSelectionChange = null;
+let onSelectionComplete = null;
+let selectedEmojis = new Set();
+let lastConstellation = { nodes: [], edges: [] };
 
 const STAR_COUNT = 140;
 
@@ -74,33 +78,16 @@ function drawConstellation(constellation) {
 
   constellation.nodes.forEach((node) => {
     const pos = ensureNodePosition(node.emoji);
-    const pulse = 1 + node.normalized * 0.8 + resonanceLevel * 0.6;
+    const isSelected = selectedEmojis.has(node.emoji);
+    const pulse = 1 + node.normalized * 0.8 + resonanceLevel * 0.6 + (isSelected ? 0.4 : 0);
     ctx.save();
-    ctx.shadowColor = `rgba(129,140,248,${0.4 + node.normalized * 0.4})`;
-    ctx.shadowBlur = 12 + node.normalized * 18;
+    const glowBoost = isSelected ? 0.3 : 0;
+    ctx.shadowColor = `rgba(129,140,248,${0.4 + node.normalized * 0.4 + glowBoost})`;
+    ctx.shadowBlur = 12 + node.normalized * 18 + (isSelected ? 14 : 0);
     ctx.font = `${26 * pulse}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(node.emoji, pos.x, pos.y);
-    ctx.restore();
-  });
-}
-
-function drawDrops() {
-  drops.forEach((drop) => {
-    drop.x += drop.vx;
-    drop.y += drop.vy;
-    drop.vx *= 0.99;
-    drop.vy *= 0.99;
-
-    const wobble = Math.sin(performance.now() * 0.003 + drop.seed) * (0.4 + resonanceLevel);
-    ctx.save();
-    ctx.font = `${28 + resonanceLevel * 8}px serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = `rgba(248,250,252,${0.3 + resonanceLevel * 0.3})`;
-    ctx.shadowBlur = 18;
-    ctx.fillText(drop.emoji, drop.x + wobble, drop.y - wobble);
     ctx.restore();
   });
 }
@@ -126,47 +113,80 @@ function loop() {
 
   drawStars();
   updateNodes();
-  drawConstellation(getConstellation ? getConstellation() : null);
-  drawDrops();
+  lastConstellation = getConstellation ? getConstellation() : { nodes: [], edges: [] };
+  drawConstellation(lastConstellation);
 
   requestAnimationFrame(loop);
 }
 
-export function initCosmos({ getConstellation: getConstellationFn }) {
+function handlePointer(event) {
+  if (!interactionEnabled) return;
+  if (!lastConstellation?.nodes?.length) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  let hit = null;
+  lastConstellation.nodes.forEach((node) => {
+    const pos = ensureNodePosition(node.emoji);
+    const dist = Math.hypot(x - pos.x, y - pos.y);
+    if (dist < 28) {
+      hit = node.emoji;
+    }
+  });
+
+  if (!hit) return;
+
+  if (selectedEmojis.has(hit)) {
+    selectedEmojis.delete(hit);
+  } else if (selectedEmojis.size < 3) {
+    selectedEmojis.add(hit);
+  }
+
+  const selection = [...selectedEmojis];
+  onSelectionChange?.(selection);
+  if (selection.length === 3) {
+    onSelectionComplete?.(selection);
+  }
+}
+
+export function initCosmos({
+  getConstellation: getConstellationFn,
+  onSelectionChange: onSelectionChangeFn,
+  onSelectionComplete: onSelectionCompleteFn
+}) {
   if (running) return;
   running = true;
   getConstellation = getConstellationFn;
+  onSelectionChange = onSelectionChangeFn;
+  onSelectionComplete = onSelectionCompleteFn;
 
   canvas = document.createElement("canvas");
   canvas.style.position = "fixed";
   canvas.style.inset = "0";
   canvas.style.zIndex = "0";
-  canvas.style.pointerEvents = "none";
+  canvas.style.pointerEvents = "auto";
   document.body.appendChild(canvas);
 
   ctx = canvas.getContext("2d");
   resize();
   window.addEventListener("resize", resize);
+  canvas.addEventListener("pointerdown", handlePointer);
 
   stars = Array.from({ length: STAR_COUNT }, createStar);
   requestAnimationFrame(loop);
 }
 
-export function addDrop(emoji, x, y) {
-  drops.push({
-    emoji,
-    x,
-    y,
-    vx: (Math.random() - 0.5) * 0.6,
-    vy: (Math.random() - 0.5) * 0.6,
-    seed: Math.random() * 10
-  });
-}
-
-export function clearDrops() {
-  drops = [];
-}
-
 export function setResonance(active) {
   resonanceTarget = active ? 1 : 0;
+}
+
+export function setInteractionEnabled(enabled) {
+  interactionEnabled = enabled;
+}
+
+export function clearSelection() {
+  selectedEmojis = new Set();
+  onSelectionChange?.([]);
 }

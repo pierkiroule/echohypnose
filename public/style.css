@@ -28,98 +28,30 @@ canvas {
   pointer-events: none;
 }
 
-.ui-panel {
-  padding: 16px 18px 24px;
-  background: linear-gradient(180deg, rgba(5, 7, 15, 0) 0%, rgba(5, 7, 15, 0.65) 35%, rgba(5, 7, 15, 0.95) 100%);
-  pointer-events: auto;
-}
-
-.ui-header {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  opacity: 0.5;
-  text-align: center;
-  margin-bottom: 6px;
-}
-
-.ui-status {
-  text-align: center;
-  font-size: 16px;
-  margin-bottom: 12px;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  max-width: 360px;
-  margin: 0 auto 14px;
-}
-
-.emoji-button {
-  font-size: 28px;
-  padding: 14px 0;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(10, 12, 25, 0.7);
-  color: #fff;
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.emoji-button.selected {
-  border-color: rgba(99, 102, 241, 0.9);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
-  transform: translateY(-2px);
-}
-
-.emoji-button.used {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.ui-actions {
-  display: flex;
-  justify-content: center;
-}
-
-.action-button {
-  padding: 12px 22px;
-  border-radius: 999px;
-  border: none;
-  background: rgba(99, 102, 241, 0.9);
-  color: white;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.action-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.action-button:active {
-  transform: translateY(1px);
-}
-
-.drag-ghost {
+.ui-top {
   position: fixed;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90vw);
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
   pointer-events: none;
-  z-index: 4;
-  transform: translate(-50%, -50%);
-  filter: drop-shadow(0 0 12px rgba(148, 163, 184, 0.8));
+}
+
+.ui-top p {
+  margin: 0 0 6px;
+}
+
+.ui-bottom {
+  padding: 18px 18px 26px;
+  text-align: center;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.82);
+  background: linear-gradient(180deg, rgba(5, 7, 15, 0) 0%, rgba(5, 7, 15, 0.55) 40%, rgba(5, 7, 15, 0.9) 100%);
+  pointer-events: none;
 }
 
 .constellation-label {
