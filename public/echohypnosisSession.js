@@ -135,6 +135,42 @@ function createStarfield(rng, count = 400) {
   return new THREE.Points(geometry, material);
 }
 
+function createPointCloud(rng, count = 900) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const baseColor = new THREE.Color(0x7f8cff);
+  for (let i = 0; i < count; i += 1) {
+    const idx = i * 3;
+    const radius = 3 + rng() * 5.5;
+    const theta = rng() * Math.PI * 2;
+    const phi = Math.acos(2 * rng() - 1);
+    positions[idx] = radius * Math.sin(phi) * Math.cos(theta);
+    positions[idx + 1] = (rng() - 0.5) * 3.5;
+    positions[idx + 2] = radius * Math.sin(phi) * Math.sin(theta);
+    velocities[idx] = (rng() - 0.5) * 0.0025;
+    velocities[idx + 1] = (rng() - 0.5) * 0.0015;
+    velocities[idx + 2] = (rng() - 0.5) * 0.0025;
+    const tint = baseColor.clone().offsetHSL(rng() * 0.1, 0, rng() * 0.15);
+    colors[idx] = tint.r;
+    colors[idx + 1] = tint.g;
+    colors[idx + 2] = tint.b;
+  }
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.PointsMaterial({
+    size: 0.05,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.6,
+    depthWrite: false
+  });
+  const points = new THREE.Points(geometry, material);
+  points.userData = { velocities, baseOpacity: 0.6 };
+  return points;
+}
+
 export async function startEchohypnosisSession(
   emojis,
   { cycleDuration = 60000, onStop = null } = {}
@@ -216,6 +252,9 @@ export async function startEchohypnosisSession(
 
   const starfield = createStarfield(rng);
   scene.add(starfield);
+
+  const pointCloud = createPointCloud(rng);
+  scene.add(pointCloud);
 
   const cluster = new THREE.Group();
   scene.add(cluster);
@@ -387,6 +426,20 @@ export async function startEchohypnosisSession(
     const bass = (musicBands.bass + voiceBands.bass) * 0.5;
     const mid = (musicBands.mid + voiceBands.mid) * 0.5;
     const high = (musicBands.high + voiceBands.high) * 0.5;
+
+    const pointPositions = pointCloud.geometry.attributes.position.array;
+    const pointVelocities = pointCloud.userData.velocities;
+    for (let i = 0; i < pointPositions.length; i += 3) {
+      pointPositions[i] += pointVelocities[i] * (1 + bass * 1.2);
+      pointPositions[i + 1] += pointVelocities[i + 1] * (1 + mid);
+      pointPositions[i + 2] += pointVelocities[i + 2] * (1 + high);
+      if (pointPositions[i] > 7 || pointPositions[i] < -7) pointVelocities[i] *= -1;
+      if (pointPositions[i + 1] > 3.5 || pointPositions[i + 1] < -3.5) pointVelocities[i + 1] *= -1;
+      if (pointPositions[i + 2] > 7 || pointPositions[i + 2] < -7) pointVelocities[i + 2] *= -1;
+    }
+    pointCloud.geometry.attributes.position.needsUpdate = true;
+    pointCloud.material.opacity = pointCloud.userData.baseOpacity + bass * 0.25 + high * 0.1;
+    pointCloud.rotation.y += 0.0006 + mid * 0.0008;
 
     cluster.rotation.y += 0.0014 + profile.orbit * 0.0015 + bass * 0.003;
     cluster.rotation.x += 0.0006 + mid * 0.0015;

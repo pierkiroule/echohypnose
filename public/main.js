@@ -25,7 +25,7 @@ root.innerHTML = `
   <div class="ui-shell">
     <div class="ui-top">
       <div class="ui-brand">
-        <h1 class="ui-title">Echohypno•°</h1>
+        <h1 class="ui-title">Echohypnoz360•°</h1>
         <p class="ui-tagline">Laisser résonner l'inconscient partagé</p>
       </div>
       <p class="ui-copy">Bienvenue dans l'inconscient échohypnotique.</p>
