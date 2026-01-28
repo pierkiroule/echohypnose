@@ -12,6 +12,9 @@ let getConstellation = null;
 let interactionEnabled = true;
 let onSelectionChange = null;
 let onSelectionComplete = null;
+let onResonanceTap = null;
+let allowSelection = true;
+let resonancePulse = 0;
 let selectedEmojis = new Set();
 let selectedOrder = [];
 let lastConstellation = { nodes: [], edges: [] };
@@ -84,7 +87,7 @@ function drawConstellation(constellation, fade) {
     const isSelected = selectedEmojis.has(node.emoji);
     const baseSize = 18 + node.normalized * 22;
     const pulse = (isSelected ? 1.25 : 1) * (1 + node.normalized * 0.15);
-    const radius = baseSize * pulse;
+    const radius = baseSize * pulse * (1 + resonancePulse * 0.12);
     const nodeFade = fade;
     ctx.save();
     const halo = isSelected ? 0.8 : 0.35;
@@ -123,6 +126,7 @@ function loop() {
 
   resonanceLevel += (resonanceTarget - resonanceLevel) * 0.05;
   sessionFade += (sessionTarget - sessionFade) * 0.05;
+  resonancePulse *= 0.92;
   const fade = Math.max(0, 1 - sessionFade);
 
   ctx.fillStyle = `rgba(5,7,15,${(0.16 - resonanceLevel * 0.04) * fade})`;
@@ -138,7 +142,11 @@ function loop() {
 
 function handlePointer(event) {
   if (!interactionEnabled) return;
-  if (!lastConstellation?.nodes?.length) return;
+  if (!lastConstellation?.nodes?.length) {
+    onResonanceTap?.();
+    resonancePulse = 1;
+    return;
+  }
 
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -154,31 +162,38 @@ function handlePointer(event) {
     }
   });
 
-  if (!hit) return;
+  if (hit && allowSelection) {
+    if (selectedEmojis.has(hit)) {
+      selectedEmojis.delete(hit);
+    } else if (selectedEmojis.size < 3) {
+      selectedEmojis.add(hit);
+    }
 
-  if (selectedEmojis.has(hit)) {
-    selectedEmojis.delete(hit);
-  } else if (selectedEmojis.size < 3) {
-    selectedEmojis.add(hit);
+    const selection = [...selectedEmojis];
+    onSelectionChange?.(selection);
+    if (selection.length === 3) {
+      onSelectionComplete?.(selection);
+    }
   }
 
-  const selection = [...selectedEmojis];
-  onSelectionChange?.(selection);
-  if (selection.length === 3) {
-    onSelectionComplete?.(selection);
-  }
+  onResonanceTap?.(hit);
+  resonancePulse = 1;
 }
 
 export function initCosmos({
   getConstellation: getConstellationFn,
   onSelectionChange: onSelectionChangeFn,
-  onSelectionComplete: onSelectionCompleteFn
+  onSelectionComplete: onSelectionCompleteFn,
+  onResonanceTap: onResonanceTapFn,
+  allowSelection: allowSelectionValue = true
 }) {
   if (running) return;
   running = true;
   getConstellation = getConstellationFn;
   onSelectionChange = onSelectionChangeFn;
   onSelectionComplete = onSelectionCompleteFn;
+  onResonanceTap = onResonanceTapFn;
+  allowSelection = allowSelectionValue;
 
   canvas = document.createElement("canvas");
   canvas.style.position = "fixed";

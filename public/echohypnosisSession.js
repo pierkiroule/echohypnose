@@ -293,7 +293,8 @@ export async function startEchohypnosisSession(
     organicMeshes.push(mesh);
   }
 
-  emojis.slice(0, 3).forEach((emoji, index) => {
+  const activeEmojis = emojis.length ? emojis.slice(0, 3) : ["✨"];
+  activeEmojis.forEach((emoji, index) => {
     const tint = glowColor.clone().offsetHSL(index * 0.08, 0, 0.1);
     const texture = createEmojiTexture(emoji, tint);
     const sprite = new THREE.Sprite(
@@ -319,11 +320,11 @@ export async function startEchohypnosisSession(
     node.add(sprite);
     node.userData = {
       emoji,
-      orbitRadius: 1.8 + rng() * 1.4,
+      orbitRadius: activeEmojis.length === 1 ? 0 : 1.8 + rng() * 1.4,
       orbitOffset: rng() * Math.PI * 2,
-      orbitSpeed: 0.15 + rng() * 0.2,
+      orbitSpeed: activeEmojis.length === 1 ? 0 : 0.15 + rng() * 0.2,
       floatOffset: rng() * Math.PI * 2,
-      baseY: (rng() - 0.5) * 0.8,
+      baseY: activeEmojis.length === 1 ? 0 : (rng() - 0.5) * 0.8,
       baseScale: 0.85 + rng() * 0.25
     };
     emojiGroup.add(node);
@@ -412,6 +413,10 @@ export async function startEchohypnosisSession(
 
   scheduleVoice();
 
+  const endTime = ctx.currentTime + cycleDuration / 1000;
+  masterGain.gain.setTargetAtTime(0.0001, endTime - 2.2, 0.8);
+  const autoStopTimer = window.setTimeout(() => stop(), cycleDuration + 200);
+
   function animate() {
     if (!active) return;
 
@@ -458,7 +463,7 @@ export async function startEchohypnosisSession(
     emojiGroup.children.forEach((node) => {
       const { orbitRadius, orbitOffset, orbitSpeed, floatOffset, baseY, baseScale } = node.userData;
       const angle = time * orbitSpeed + orbitOffset;
-      const bob = Math.sin(time * 0.9 + floatOffset) * 0.35;
+      const bob = Math.sin(time * 0.9 + floatOffset) * (orbitRadius === 0 ? 0.18 : 0.35);
       node.position.set(Math.cos(angle) * orbitRadius, baseY + bob, Math.sin(angle) * orbitRadius);
       const pulse = 1 + bass * 0.7 + mid * 0.35;
       node.scale.setScalar(baseScale * pulse);
@@ -489,6 +494,7 @@ export async function startEchohypnosisSession(
   function stop() {
     if (!active) return;
     active = false;
+    window.clearTimeout(autoStopTimer);
     window.removeEventListener("resize", resize);
     window.removeEventListener("keydown", handleExitKey);
     renderer.domElement.removeEventListener("dblclick", stop);
