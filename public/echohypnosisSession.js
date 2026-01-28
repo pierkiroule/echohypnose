@@ -90,7 +90,10 @@ function computeBands(data) {
   return bands;
 }
 
-export async function startEchohypnosisSession(emojis, { duration = 60000 } = {}) {
+export async function startEchohypnosisSession(
+  emojis,
+  { cycleDuration = 60000, onStop = null } = {}
+) {
   const seed = Date.now() + Math.floor(Math.random() * 10000);
   const rng = mulberry32(seed);
   const profile = buildProfile(emojis, rng);
@@ -129,42 +132,8 @@ export async function startEchohypnosisSession(emojis, { duration = 60000 } = {}
   );
 
   const voiceSources = [];
-  const voiceStart = ctx.currentTime + 1.5;
-  const coreStart = duration * 0.25;
-  const coreEnd = duration * 0.75;
-  const voiceCount = Math.floor(3 + profile.density * 6);
+  const voiceTimers = new Set();
   const voiceSpacing = 1.8 - profile.tempo * 0.8;
-
-  let cursor = voiceStart + coreStart / 1000;
-  for (let i = 0; i < voiceCount; i += 1) {
-    const buffer = pick(rng, voiceBuffers);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-
-    const panner = ctx.createStereoPanner();
-    panner.pan.value = (rng() * 2 - 1) * (0.2 + profile.dispersion * 0.7);
-
-    const gain = ctx.createGain();
-    gain.gain.value = 0.0001;
-
-    source.connect(panner);
-    panner.connect(gain);
-    gain.connect(voiceGain);
-
-    const fadeIn = cursor + 0.2;
-    const fadeOut = cursor + Math.min(buffer.duration, 2.8);
-
-    gain.gain.setValueAtTime(0.0001, cursor);
-    gain.gain.exponentialRampToValueAtTime(0.75, fadeIn);
-    gain.gain.exponentialRampToValueAtTime(0.0001, fadeOut);
-
-    source.start(cursor);
-    source.stop(fadeOut + 0.1);
-
-    voiceSources.push(source);
-    cursor += voiceSpacing + rng() * 1.4;
-    if (cursor * 1000 > coreEnd) break;
-  }
 
   const now = ctx.currentTime;
   masterGain.gain.setValueAtTime(0.0001, now);
@@ -178,7 +147,7 @@ export async function startEchohypnosisSession(emojis, { duration = 60000 } = {}
   renderer.domElement.style.position = "fixed";
   renderer.domElement.style.inset = "0";
   renderer.domElement.style.zIndex = "1";
-  renderer.domElement.style.pointerEvents = "none";
+  renderer.domElement.style.pointerEvents = "auto";
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -256,10 +225,53 @@ export async function startEchohypnosisSession(emojis, { duration = 60000 } = {}
   const line = new THREE.LineLoop(lineGeometry, lineMaterial);
   constellation.add(line);
 
+  const controlsGroup = new THREE.Group();
+  controlsGroup.position.set(0, -1.9, 2.6);
+  scene.add(controlsGroup);
+
+  const controlColor = new THREE.Color(0x9aa9ff);
+  const controlMaterial = new THREE.MeshStandardMaterial({
+    color: controlColor,
+    emissive: controlColor,
+    emissiveIntensity: 0.4,
+    roughness: 0.4,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.7
+  });
+
+  const playShape = new THREE.Shape();
+  playShape.moveTo(-0.18, -0.22);
+  playShape.lineTo(0.22, 0);
+  playShape.lineTo(-0.18, 0.22);
+  playShape.lineTo(-0.18, -0.22);
+  const playMesh = new THREE.Mesh(new THREE.ShapeGeometry(playShape), controlMaterial.clone());
+  playMesh.userData.control = "play";
+  playMesh.position.set(-0.7, 0, 0);
+  controlsGroup.add(playMesh);
+
+  const pauseGroup = new THREE.Group();
+  pauseGroup.userData.control = "pause";
+  const barGeom = new THREE.BoxGeometry(0.12, 0.32, 0.08);
+  const leftBar = new THREE.Mesh(barGeom, controlMaterial.clone());
+  const rightBar = new THREE.Mesh(barGeom, controlMaterial.clone());
+  leftBar.position.set(-0.08, 0, 0);
+  rightBar.position.set(0.08, 0, 0);
+  pauseGroup.add(leftBar, rightBar);
+  controlsGroup.add(pauseGroup);
+
+  const stopMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.08), controlMaterial.clone());
+  stopMesh.userData.control = "stop";
+  stopMesh.position.set(0.7, 0, 0);
+  controlsGroup.add(stopMesh);
+
+  const controlTargets = [playMesh, pauseGroup, stopMesh];
+
   const musicData = new Uint8Array(musicAnalyser.frequencyBinCount);
   const voiceData = new Uint8Array(voiceAnalyser.frequencyBinCount);
 
   let active = true;
+  let playing = true;
   const start = performance.now();
 
   function resize() {
@@ -271,14 +283,88 @@ export async function startEchohypnosisSession(emojis, { duration = 60000 } = {}
 
   window.addEventListener("resize", resize);
 
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+
+  function setControlsState(nextPlaying) {
+    playing = nextPlaying;
+    const targetGain = nextPlaying ? 0.85 : 0.0001;
+    masterGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.25);
+
+    playMesh.material.opacity = nextPlaying ? 0.35 : 0.85;
+    pauseGroup.children.forEach((mesh) => {
+      mesh.material.opacity = nextPlaying ? 0.85 : 0.35;
+    });
+  }
+
+  function handlePointer(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(controlTargets, true);
+    if (!hits.length) return;
+    const hit = hits[0].object;
+    const control = hit.userData.control || hit.parent?.userData.control;
+    if (control === "play") {
+      setControlsState(true);
+    }
+    if (control === "pause") {
+      setControlsState(false);
+    }
+    if (control === "stop") {
+      stop();
+    }
+  }
+
+  renderer.domElement.addEventListener("pointerdown", handlePointer);
+  setControlsState(true);
+
+  function scheduleVoice() {
+    if (!active) return;
+    const buffer = pick(rng, voiceBuffers);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = (rng() * 2 - 1) * (0.2 + profile.dispersion * 0.7);
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+
+    source.connect(panner);
+    panner.connect(gain);
+    gain.connect(voiceGain);
+
+    const startAt = ctx.currentTime + 0.05;
+    const fadeIn = startAt + 0.25;
+    const fadeOut = startAt + Math.min(buffer.duration, 2.8);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.75, fadeIn);
+    gain.gain.exponentialRampToValueAtTime(0.0001, fadeOut);
+
+    source.start(startAt);
+    source.stop(fadeOut + 0.1);
+    voiceSources.push(source);
+
+    const gapMs = (voiceSpacing + rng() * 1.6 + profile.density * 0.6) * 1000;
+    const timer = window.setTimeout(() => {
+      voiceTimers.delete(timer);
+      scheduleVoice();
+    }, gapMs);
+    voiceTimers.add(timer);
+  }
+
+  scheduleVoice();
+
   function animate() {
     if (!active) return;
 
     const elapsed = performance.now() - start;
-    const t = clamp01(elapsed / duration);
-    const entryPhase = clamp01(t / 0.25);
-    const exitPhase = clamp01((t - 0.75) / 0.25);
-    const corePhase = clamp01((t - 0.25) / 0.5);
+    const cycleT = (elapsed % cycleDuration) / cycleDuration;
+    const entryPhase = clamp01(cycleT / 0.25);
+    const exitPhase = clamp01((cycleT - 0.75) / 0.25);
+    const corePhase = clamp01((cycleT - 0.25) / 0.5);
 
     musicAnalyser.getByteFrequencyData(musicData);
     voiceAnalyser.getByteFrequencyData(voiceData);
@@ -313,39 +399,46 @@ export async function startEchohypnosisSession(emojis, { duration = 60000 } = {}
     coreLight.intensity = 0.4 + entryPhase * 0.5 + mid * 0.6 - exitPhase * 0.5;
     ambient.intensity = 0.25 + entryPhase * 0.25 + high * 0.2 - exitPhase * 0.2;
 
+    controlsGroup.rotation.z = Math.sin(elapsed * 0.0008) * 0.15;
+    controlsGroup.position.y = -1.9 + Math.sin(elapsed * 0.0006) * 0.08;
+    controlsGroup.children.forEach((control) => {
+      control.scale.setScalar(1 + bass * 0.12 + mid * 0.06);
+    });
+
     renderer.render(scene, camera);
 
-    if (t < 1) {
-      requestAnimationFrame(animate);
-    }
+    requestAnimationFrame(animate);
   }
 
   animate();
 
-  const stopAt = ctx.currentTime + duration / 1000;
-  masterGain.gain.exponentialRampToValueAtTime(0.0001, stopAt - 1.8);
+  function stop() {
+    if (!active) return;
+    active = false;
+    window.removeEventListener("resize", resize);
+    renderer.domElement.removeEventListener("pointerdown", handlePointer);
+    renderer.dispose();
+    renderer.domElement.remove();
+    scene.clear();
+    try { musicSource.stop(); } catch {}
+    voiceSources.forEach((src) => {
+      try { src.stop(); } catch {}
+    });
+    voiceTimers.forEach((timer) => window.clearTimeout(timer));
+    voiceTimers.clear();
+    masterGain.disconnect();
+    musicGain.disconnect();
+    voiceGain.disconnect();
+    musicAnalyser.disconnect();
+    voiceAnalyser.disconnect();
+    onStop?.();
+  }
 
-  const done = new Promise((resolve) => {
-    window.setTimeout(() => {
-      active = false;
-      window.removeEventListener("resize", resize);
-      renderer.dispose();
-      renderer.domElement.remove();
-      scene.clear();
-      try { musicSource.stop(); } catch {}
-      voiceSources.forEach((src) => {
-        try { src.stop(); } catch {}
-      });
-      masterGain.disconnect();
-      musicGain.disconnect();
-      voiceGain.disconnect();
-      musicAnalyser.disconnect();
-      voiceAnalyser.disconnect();
-      resolve();
-    }, duration);
-  });
-
-  return { done };
+  return {
+    stop,
+    pause: () => setControlsState(false),
+    resume: () => setControlsState(true)
+  };
 }
 
 window.startEchohypnosisSession = startEchohypnosisSession;
