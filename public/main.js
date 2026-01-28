@@ -17,6 +17,7 @@ const cosmos = createCosmos({
 
 let selection = [];
 let lockedPair = null;
+let linkedPairs = [];
 let lastTime = performance.now();
 
 function resize() {
@@ -38,12 +39,16 @@ function pairKey(pair) {
   return pair.slice().sort().join("|");
 }
 
-function findLockedPair(pairs) {
-  if (!pairs.length) return null;
-  if (!lockedPair) return pairs[0];
-  const lockedKey = pairKey(lockedPair);
-  const stillTouching = pairs.find((pair) => pairKey(pair) === lockedKey);
-  return stillTouching || pairs[0];
+function mergeLinkedPairs(pairs, nextPairs) {
+  const nextSet = new Set(pairs.map((pair) => pairKey(pair)));
+  nextPairs.forEach((pair) => {
+    const key = pairKey(pair);
+    if (!nextSet.has(key)) {
+      nextSet.add(key);
+      pairs.push(pair);
+    }
+  });
+  return pairs;
 }
 
 function findTriangleFromPair(pairs, pair) {
@@ -84,20 +89,23 @@ function tick(now) {
   cosmos.drawBackground(ctx);
 
   const touchingPairs = cosmos.getTouchingPairs();
-  lockedPair = findLockedPair(touchingPairs);
+  linkedPairs = mergeLinkedPairs(linkedPairs, touchingPairs);
+  if (!lockedPair && touchingPairs.length) {
+    lockedPair = touchingPairs[0];
+  }
   const touchingTriangle = findTriangleFromPair(touchingPairs, lockedPair);
   if (touchingTriangle.length !== selection.length || touchingTriangle.some((emoji) => !selection.includes(emoji))) {
     updateSelection(touchingTriangle);
   }
   if (!touchingPairs.length) {
-    lockedPair = null;
+    lockedPair = lockedPair ?? null;
   }
 
   cosmos.drawEmojis(ctx, {
     selection,
     dancePositions: null,
     fade: 1,
-    pairs: touchingPairs,
+    pairs: linkedPairs,
     highlightPairs: lockedPair ? [lockedPair] : []
   });
 
