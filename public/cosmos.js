@@ -100,7 +100,7 @@ export function createCosmos({ emojis, getBounds }) {
     ctx.restore();
   }
 
-  function drawEmojis(ctx, { selection: selectedEmojis, dancePositions, fade = 1 }) {
+  function drawEmojis(ctx, { selection: selectedEmojis, dancePositions, fade = 1, pairs = [] }) {
     const selectedSet = new Set(selectedEmojis);
 
     nodes.forEach((node) => {
@@ -128,6 +128,22 @@ export function createCosmos({ emojis, getBounds }) {
         fade
       });
     });
+
+    if (pairs.length > 0) {
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = `rgba(129, 140, 248, ${0.55 * fade})`;
+      pairs.forEach(([aEmoji, bEmoji]) => {
+        const a = nodes.find((item) => item.emoji === aEmoji);
+        const b = nodes.find((item) => item.emoji === bEmoji);
+        if (!a || !b) return;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
 
     if (selectedEmojis.length === 3) {
       const selectedNodes = selectedEmojis
@@ -187,22 +203,36 @@ export function createCosmos({ emojis, getBounds }) {
     });
   }
 
-  function getTouchingTriangle() {
+  function getTouchingPairs() {
     const threshold = 0.45;
+    const pairs = [];
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const a = nodes[i];
+        const b = nodes[j];
+        const ab = Math.hypot(a.x - b.x, a.y - b.y);
+        if (ab < (a.size + b.size) * threshold) {
+          pairs.push([a.emoji, b.emoji]);
+        }
+      }
+    }
+    return pairs;
+  }
+
+  function getTouchingTriangle(pairs = getTouchingPairs()) {
+    const threshold = 0.45;
+    const pairSet = new Set(pairs.map((pair) => pair.slice().sort().join("|")));
     for (let i = 0; i < nodes.length; i += 1) {
       for (let j = i + 1; j < nodes.length; j += 1) {
         for (let k = j + 1; k < nodes.length; k += 1) {
           const a = nodes[i];
           const b = nodes[j];
           const c = nodes[k];
-          const ab = Math.hypot(a.x - b.x, a.y - b.y);
           const bc = Math.hypot(b.x - c.x, b.y - c.y);
           const ca = Math.hypot(c.x - a.x, c.y - a.y);
-          if (
-            ab < (a.size + b.size) * threshold &&
-            bc < (b.size + c.size) * threshold &&
-            ca < (c.size + a.size) * threshold
-          ) {
+          const pairAB = [a.emoji, b.emoji].sort().join("|");
+          if (!pairSet.has(pairAB)) continue;
+          if (bc < (b.size + c.size) * threshold && ca < (c.size + a.size) * threshold) {
             return [a.emoji, b.emoji, c.emoji];
           }
         }
@@ -221,6 +251,7 @@ export function createCosmos({ emojis, getBounds }) {
     setSelection,
     clearSelection,
     applyResonance,
+    getTouchingPairs,
     getTouchingTriangle,
     getSelectionPositions
   };

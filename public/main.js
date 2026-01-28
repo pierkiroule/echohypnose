@@ -57,7 +57,8 @@ function tick(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   cosmos.drawBackground(ctx);
 
-  const touchingTriangle = cosmos.getTouchingTriangle();
+  const touchingPairs = cosmos.getTouchingPairs();
+  const touchingTriangle = cosmos.getTouchingTriangle(touchingPairs);
   if (touchingTriangle.length !== selection.length || touchingTriangle.some((emoji) => !selection.includes(emoji))) {
     updateSelection(touchingTriangle);
   }
@@ -65,7 +66,8 @@ function tick(now) {
   cosmos.drawEmojis(ctx, {
     selection,
     dancePositions: null,
-    fade: 1
+    fade: 1,
+    pairs: touchingPairs
   });
 
   requestAnimationFrame(tick);
