@@ -16,7 +16,7 @@ const ctx = canvas.getContext("2d");
 
 const cosmos = createCosmos({
   emojis: EMOJIS,
-  getBounds: () => ({ width: canvas.width, height: canvas.height })
+  getBounds: () => ({ width: window.innerWidth, height: window.innerHeight })
 });
 
 const audio = createAudioEngine();
@@ -87,6 +87,14 @@ function handlePointer(event) {
   }
 }
 
+function handleTouch(event) {
+  if (sequenceActive) return;
+  if (!event.touches.length) return;
+  event.preventDefault();
+  const touch = event.touches[0];
+  handlePointer(touch);
+}
+
 function tick(now) {
   const dt = (now - lastTime) / 1000;
   lastTime = now;
@@ -130,6 +138,7 @@ function tick(now) {
 }
 
 canvas.addEventListener("pointerdown", handlePointer);
+canvas.addEventListener("touchstart", handleTouch, { passive: false });
 window.addEventListener("resize", resize);
 resize();
 requestAnimationFrame(tick);
