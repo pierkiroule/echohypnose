@@ -25,6 +25,7 @@ export function createCosmos({ emojis, getBounds }) {
   );
   let selection = [];
   let lockedSelection = new Set();
+  let particles = [];
   let width = window.innerWidth;
   let height = window.innerHeight;
 
@@ -49,11 +50,34 @@ export function createCosmos({ emojis, getBounds }) {
       if (lockedSelection.has(node.emoji)) return;
       node.x += node.vx * dt;
       node.y += node.vy * dt;
+      node.vx *= 0.97;
+      node.vy *= 0.97;
       const padding = 30;
       if (node.x < padding || node.x > width - padding) node.vx *= -1;
       if (node.y < padding || node.y > height - padding) node.vy *= -1;
       const drift = Math.sin(now * 0.0003 + node.driftPhase) * 6;
       node.y += drift * dt;
+
+      if (Math.random() < 0.35) {
+        particles.push({
+          x: node.x,
+          y: node.y,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8,
+          life: 0,
+          ttl: 0.8 + Math.random() * 0.6,
+          size: 1.2 + Math.random() * 1.6
+        });
+      }
+    });
+
+    particles = particles.filter((particle) => {
+      particle.life += dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      particle.vx *= 0.96;
+      particle.vy *= 0.96;
+      return particle.life < particle.ttl;
     });
   }
 
@@ -90,6 +114,12 @@ export function createCosmos({ emojis, getBounds }) {
     const baseSize = node.size * (selected ? 1.25 : 1);
     const alpha = faded ? 0.35 * fade : 1 * fade;
     ctx.save();
+    const starRadius = baseSize * 0.9;
+    ctx.globalAlpha = 0.35 * fade;
+    ctx.strokeStyle = "rgba(167, 139, 250, 0.7)";
+    ctx.lineWidth = 1.2;
+    drawStar(ctx, node.x, node.y, starRadius, starRadius * 0.45, 5);
+    ctx.stroke();
     if (glow) {
       ctx.shadowColor = "rgba(129, 140, 248, 0.7)";
       ctx.shadowBlur = 18;
@@ -111,6 +141,19 @@ export function createCosmos({ emojis, getBounds }) {
     hideOthers = false
   }) {
     const selectedSet = new Set(selectedEmojis);
+
+    if (particles.length) {
+      ctx.save();
+      particles.forEach((particle) => {
+        const lifeRatio = 1 - particle.life / particle.ttl;
+        ctx.globalAlpha = lifeRatio * 0.6 * fade;
+        ctx.fillStyle = "rgba(236, 233, 254, 0.9)";
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
 
     nodes.forEach((node) => {
       if (selectedSet.has(node.emoji)) return;
@@ -280,7 +323,7 @@ export function createCosmos({ emojis, getBounds }) {
     const dy = node.y - y;
     const dist = Math.max(40, Math.hypot(dx, dy));
     const force = Math.min(1, 260 / dist);
-    const boost = 140 * force;
+    const boost = 100 * force;
     node.vx += (dx / dist) * boost;
     node.vy += (dy / dist) * boost;
   }
@@ -335,6 +378,20 @@ export function createCosmos({ emojis, getBounds }) {
       }
     }
     return [];
+  }
+
+  function drawStar(ctx, x, y, outerRadius, innerRadius, points) {
+    const step = Math.PI / points;
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i += 1) {
+      const radius = i % 2 === 0 ? outerRadius : innerRadius;
+      const angle = i * step - Math.PI / 2;
+      const px = x + Math.cos(angle) * radius;
+      const py = y + Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
   }
 
   return {
