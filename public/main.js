@@ -18,6 +18,7 @@ const cosmos = createCosmos({
 let selection = [];
 let lockedPair = null;
 let linkedPairs = [];
+let tapWaves = [];
 let lastTime = performance.now();
 
 function resize() {
@@ -70,6 +71,7 @@ function handlePointer(event) {
   const y = event.clientY - rect.top;
   const tapPoint = cosmos.toWorldPoint(x, y);
   cosmos.applyResonance(tapPoint.x, tapPoint.y);
+  tapWaves.push({ x: tapPoint.x, y: tapPoint.y, start: performance.now() });
 }
 
 function handleTouch(event) {
@@ -88,17 +90,30 @@ function tick(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   cosmos.drawBackground(ctx);
 
+  tapWaves = tapWaves.filter((wave) => now - wave.start < 1000);
+  tapWaves.forEach((wave) => {
+    const progress = Math.min(1, (now - wave.start) / 1000);
+    const radius = 30 + progress * 180;
+    ctx.save();
+    ctx.globalAlpha = (1 - progress) * 0.35;
+    ctx.strokeStyle = "rgba(167, 139, 250, 0.8)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(wave.x, wave.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+
   const touchingPairs = cosmos.getTouchingPairs();
-  linkedPairs = mergeLinkedPairs(linkedPairs, touchingPairs);
-  if (!lockedPair && touchingPairs.length) {
-    lockedPair = touchingPairs[0];
-  }
-  const touchingTriangle = findTriangleFromPair(touchingPairs, lockedPair);
-  if (touchingTriangle.length !== selection.length || touchingTriangle.some((emoji) => !selection.includes(emoji))) {
-    updateSelection(touchingTriangle);
-  }
-  if (!touchingPairs.length) {
-    lockedPair = lockedPair ?? null;
+  if (selection.length < 3) {
+    linkedPairs = mergeLinkedPairs(linkedPairs, touchingPairs);
+    if (!lockedPair && touchingPairs.length) {
+      lockedPair = touchingPairs[0];
+    }
+    const touchingTriangle = findTriangleFromPair(touchingPairs, lockedPair);
+    if (touchingTriangle.length !== selection.length || touchingTriangle.some((emoji) => !selection.includes(emoji))) {
+      updateSelection(touchingTriangle);
+    }
   }
 
   cosmos.drawEmojis(ctx, {
