@@ -3,7 +3,7 @@ import { startEchohypnosisSession } from "./echohypnosisSession.js";
 
 const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "🧿", "🪐", "🌌", "🪷"];
 const root = document.getElementById("ui-root");
-root.innerHTML = `<div class="instruction">Choisis trois émojis dans la constellation</div>`;
+root.innerHTML = `<div class="instruction">Toc toc toc pour lancer l'onde et choisir les 3 premiers émojis</div>`;
 
 const selectionLine = document.createElement("div");
 selectionLine.className = "selection-line";
@@ -26,6 +26,12 @@ let cameraZoom = 1;
 let lastTime = performance.now();
 let session = null;
 let selectionLocked = false;
+let tapCount = 0;
+let waveSelections = [];
+let waveActive = false;
+let waveOrigin = null;
+let waveStart = 0;
+let showNetwork = true;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -64,40 +70,72 @@ function renderSelectionLine() {
 async function activateSession() {
   if (session || selection.length !== 3) return;
   selectionLocked = true;
+  showNetwork = false;
   document.body.classList.add("sequence-active");
   session = await startEchohypnosisSession(selection, {
+    cycleDuration: 60000,
     onStop: () => {
       session = null;
       selectionLocked = false;
+      showNetwork = true;
       document.body.classList.remove("sequence-active");
+      tapCount = 0;
+      waveSelections = [];
+      waveActive = false;
     }
   });
 }
 
-function toggleEmojiSelection(emoji) {
-  if (selectionLocked) return;
-  const index = selection.indexOf(emoji);
-  if (index > -1) {
-    const next = [...selection.slice(0, index), ...selection.slice(index + 1)];
-    updateSelection(next);
-    return;
+function startWave(origin) {
+  waveActive = true;
+  waveOrigin = origin;
+  waveStart = performance.now();
+  waveSelections = [];
+  updateSelection([]);
+  tapWaves = [{ x: origin.x, y: origin.y, start: waveStart, type: "pulse" }];
+  cosmos.applyResonance(origin.x, origin.y);
+}
+
+function registerWaveHit(emoji) {
+  if (waveSelections.includes(emoji)) return;
+  waveSelections.push(emoji);
+  updateSelection([...waveSelections]);
+}
+
+function handleWaveSelection(now) {
+  if (!waveActive || !waveOrigin) return;
+  const elapsed = now - waveStart;
+  const duration = 1500;
+  const progress = Math.min(1, elapsed / duration);
+  const radius = 30 + progress * 220;
+  const nodes = cosmos.getSelectionPositions(EMOJIS);
+  const candidates = nodes
+    .map((pos, index) => ({
+      emoji: EMOJIS[index],
+      dist: Math.hypot(pos.x - waveOrigin.x, pos.y - waveOrigin.y)
+    }))
+    .filter((candidate) => candidate.dist <= radius + 18 && !waveSelections.includes(candidate.emoji))
+    .sort((a, b) => a.dist - b.dist);
+  candidates.forEach((candidate) => {
+    if (waveSelections.length >= 3) return;
+    registerWaveHit(candidate.emoji);
+  });
+  if (progress >= 1 || waveSelections.length >= 3) {
+    waveActive = false;
   }
-  if (selection.length >= 3) return;
-  updateSelection([...selection, emoji]);
 }
 
 function handlePointer(event) {
+  if (selectionLocked) return;
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
-  const hit = cosmos.hitTest(x, y);
-  if (hit) {
-    toggleEmojiSelection(hit);
-    return;
-  }
+  tapCount += 1;
+  if (tapCount < 3) return;
+  if (waveActive) return;
+  tapCount = 0;
   const tapPoint = cosmos.toWorldPoint(x, y);
-  cosmos.applyResonance(tapPoint.x, tapPoint.y);
-  tapWaves.push({ x: tapPoint.x, y: tapPoint.y, start: performance.now() });
+  startWave(tapPoint);
 }
 
 function handleTouch(event) {
@@ -130,10 +168,10 @@ function tick(now) {
   ctx.scale(cameraZoom, cameraZoom);
   ctx.translate(-window.innerWidth * 0.5, -window.innerHeight * 0.5);
 
-  tapWaves = tapWaves.filter((wave) => now - wave.start < 1000);
+  tapWaves = tapWaves.filter((wave) => now - wave.start < 1500);
   tapWaves.forEach((wave) => {
-    const progress = Math.min(1, (now - wave.start) / 1000);
-    const radius = 30 + progress * 180;
+    const progress = Math.min(1, (now - wave.start) / 1500);
+    const radius = 30 + progress * 220;
     ctx.save();
     ctx.globalAlpha = (1 - progress) * 0.35;
     ctx.strokeStyle = "rgba(167, 139, 250, 0.8)";
@@ -148,10 +186,13 @@ function tick(now) {
     selection,
     dancePositions: null,
     fade: 1,
-    hideOthers: false
+    hideOthers: false,
+    showNetwork
   });
 
   ctx.restore();
+
+  handleWaveSelection(now);
 
   requestAnimationFrame(tick);
 }

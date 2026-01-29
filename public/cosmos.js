@@ -177,7 +177,8 @@ export function createCosmos({ emojis, getBounds }) {
     fade = 1,
     pairs = [],
     highlightPairs = [],
-    hideOthers = false
+    hideOthers = false,
+    showNetwork = true
   }) {
     const selectedSet = new Set(selectedEmojis);
 
@@ -194,7 +195,7 @@ export function createCosmos({ emojis, getBounds }) {
       ctx.restore();
     }
 
-    if (networkEdges.length) {
+    if (showNetwork && networkEdges.length) {
       ctx.save();
       ctx.lineWidth = 1;
       ctx.strokeStyle = `rgba(148, 163, 184, ${0.3 * fade})`;
