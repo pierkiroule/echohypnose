@@ -23,11 +23,13 @@ export function createCosmos({ emojis, getBounds }) {
   let stars = Array.from({ length: STAR_COUNT }, () =>
     createStar(window.innerWidth, window.innerHeight)
   );
+  let networkEdges = [];
   let selection = [];
   let lockedSelection = new Set();
   let particles = [];
   let width = window.innerWidth;
   let height = window.innerHeight;
+  let boundaryPadding = Math.min(width, height) * 0.18 + 40;
 
   function toWorldPoint(x, y) {
     const bounds = getBounds();
@@ -42,19 +44,56 @@ export function createCosmos({ emojis, getBounds }) {
   function resize(nextWidth, nextHeight) {
     width = nextWidth;
     height = nextHeight;
+    boundaryPadding = Math.min(width, height) * 0.18 + 40;
     stars = Array.from({ length: STAR_COUNT }, () => createStar(width, height));
   }
 
+  function getSafePadding() {
+    return Math.min(boundaryPadding, width * 0.35, height * 0.35);
+  }
+
+  function buildNetworkEdges() {
+    const edges = new Set();
+    nodes.forEach((node) => {
+      const neighbors = nodes
+        .filter((candidate) => candidate !== node)
+        .map((candidate) => ({
+          emoji: candidate.emoji,
+          dist: Math.hypot(node.x - candidate.x, node.y - candidate.y)
+        }))
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, 2);
+      neighbors.forEach((neighbor) => {
+        const key = node.emoji < neighbor.emoji
+          ? `${node.emoji}|${neighbor.emoji}`
+          : `${neighbor.emoji}|${node.emoji}`;
+        edges.add(key);
+      });
+    });
+    networkEdges = [...edges].map((key) => key.split("|"));
+  }
+
+  buildNetworkEdges();
+  nodes.forEach((node) => {
+    const safePadding = getSafePadding();
+    node.x = safePadding + Math.random() * (width - safePadding * 2);
+    node.y = safePadding + Math.random() * (height - safePadding * 2);
+  });
+
   function update(dt, now) {
+    const centerX = width * 0.5;
+    const centerY = height * 0.5;
+    const safePadding = getSafePadding();
     nodes.forEach((node) => {
       if (lockedSelection.has(node.emoji)) return;
+      node.vx += (centerX - node.x) * 0.002 * dt;
+      node.vy += (centerY - node.y) * 0.002 * dt;
       node.x += node.vx * dt;
       node.y += node.vy * dt;
       node.vx *= 0.97;
       node.vy *= 0.97;
-      const padding = 30;
-      if (node.x < padding || node.x > width - padding) node.vx *= -1;
-      if (node.y < padding || node.y > height - padding) node.vy *= -1;
+      if (node.x < safePadding || node.x > width - safePadding) node.vx *= -1;
+      if (node.y < safePadding || node.y > height - safePadding) node.vy *= -1;
       const drift = Math.sin(now * 0.0003 + node.driftPhase) * 6;
       node.y += drift * dt;
 
@@ -138,7 +177,8 @@ export function createCosmos({ emojis, getBounds }) {
     fade = 1,
     pairs = [],
     highlightPairs = [],
-    hideOthers = false
+    hideOthers = false,
+    showNetwork = true
   }) {
     const selectedSet = new Set(selectedEmojis);
 
@@ -151,6 +191,22 @@ export function createCosmos({ emojis, getBounds }) {
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
         ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    if (showNetwork && networkEdges.length) {
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(148, 163, 184, ${0.3 * fade})`;
+      networkEdges.forEach(([aEmoji, bEmoji]) => {
+        const a = nodes.find((item) => item.emoji === aEmoji);
+        const b = nodes.find((item) => item.emoji === bEmoji);
+        if (!a || !b) return;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
       });
       ctx.restore();
     }
@@ -212,24 +268,6 @@ export function createCosmos({ emojis, getBounds }) {
         ctx.stroke();
       });
       ctx.restore();
-    }
-
-    if (selectedEmojis.length === 3) {
-      const selectedNodes = selectedEmojis
-        .map((emoji) => nodes.find((item) => item.emoji === emoji))
-        .filter(Boolean);
-      if (selectedNodes.length === 3) {
-        ctx.save();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = `rgba(129, 140, 248, ${0.7 * fade})`;
-        ctx.beginPath();
-        ctx.moveTo(selectedNodes[0].x, selectedNodes[0].y);
-        ctx.lineTo(selectedNodes[1].x, selectedNodes[1].y);
-        ctx.lineTo(selectedNodes[2].x, selectedNodes[2].y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-      }
     }
   }
 
