@@ -1,12 +1,8 @@
 import { createCosmos } from "./cosmos.js";
-import { createDance } from "./dance.js";
-import { createAudioEngine } from "./audio.js";
 
 const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "🧿", "🪐", "🌌", "🪷"];
-const SEQUENCE_DURATION = 60000;
-
 const root = document.getElementById("ui-root");
-root.innerHTML = `<div class="instruction">Choisis tes 3 émojis du moment</div>`;
+root.innerHTML = `<div class="instruction">Tape pour faire vibrer les émojis jusqu'au triangle</div>`;
 
 const canvas = document.createElement("canvas");
 canvas.className = "cosmos";
@@ -19,12 +15,11 @@ const cosmos = createCosmos({
   getBounds: () => ({ width: window.innerWidth, height: window.innerHeight })
 });
 
-const audio = createAudioEngine();
-
 let selection = [];
-let dance = null;
-let sequenceStart = 0;
-let sequenceActive = false;
+let lockedPair = null;
+let linkedPairs = [];
+let tapWaves = [];
+let cameraZoom = 1;
 let lastTime = performance.now();
 
 function resize() {
@@ -42,53 +37,46 @@ function updateSelection(newSelection) {
   cosmos.setSelection(selection);
 }
 
-function startSequence() {
-  sequenceActive = true;
-  sequenceStart = performance.now();
-  const positions = cosmos.getSelectionPositions(selection);
-  dance = createDance({
-    selection,
-    positions,
-    getBounds: () => ({ width: window.innerWidth, height: window.innerHeight })
-  });
-  audio.start();
-  document.body.classList.add("sequence-active");
+function pairKey(pair) {
+  return pair.slice().sort().join("|");
 }
 
-function endSequence() {
-  sequenceActive = false;
-  dance = null;
-  selection = [];
-  cosmos.clearSelection();
-  audio.stop();
-  document.body.classList.remove("sequence-active");
+function mergeLinkedPairs(pairs, nextPairs) {
+  const nextSet = new Set(pairs.map((pair) => pairKey(pair)));
+  nextPairs.forEach((pair) => {
+    const key = pairKey(pair);
+    if (!nextSet.has(key)) {
+      nextSet.add(key);
+      pairs.push(pair);
+    }
+  });
+  return pairs;
+}
+
+function findTriangleFromPair(pairs, pair) {
+  if (!pair) return [];
+  const [a, b] = pair;
+  for (let i = 0; i < pairs.length; i += 1) {
+    const [p1, p2] = pairs[i];
+    if (p1 === a && p2 !== b) return [a, b, p2];
+    if (p2 === a && p1 !== b) return [a, b, p1];
+    if (p1 === b && p2 !== a) return [a, b, p2];
+    if (p2 === b && p1 !== a) return [a, b, p1];
+  }
+  return [];
 }
 
 function handlePointer(event) {
-  if (sequenceActive) return;
+  if (selection.length === 3) return;
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
-  const hit = cosmos.hitTest(x, y);
-  if (!hit) return;
-
-  const alreadySelected = selection.includes(hit);
-  if (alreadySelected) {
-    updateSelection(selection.filter((emoji) => emoji !== hit));
-    return;
-  }
-
-  if (selection.length < 3) {
-    const next = [...selection, hit];
-    updateSelection(next);
-    if (next.length === 3) {
-      startSequence();
-    }
-  }
+  const tapPoint = cosmos.toWorldPoint(x, y);
+  cosmos.applyResonance(tapPoint.x, tapPoint.y);
+  tapWaves.push({ x: tapPoint.x, y: tapPoint.y, start: performance.now() });
 }
 
 function handleTouch(event) {
-  if (sequenceActive) return;
   if (!event.touches.length) return;
   event.preventDefault();
   const touch = event.touches[0];
@@ -104,35 +92,62 @@ function tick(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   cosmos.drawBackground(ctx);
 
-  let dancePositions = null;
-  let fade = 1;
-  let speed = 1;
+  const targetZoom = selection.length === 3 ? 1.35 : 1;
+  cameraZoom += (targetZoom - cameraZoom) * 0.08;
 
-  if (sequenceActive && dance) {
-    const elapsed = now - sequenceStart;
-    const progress = Math.min(1, elapsed / SEQUENCE_DURATION);
-    const fadeStart = 0.85;
-    if (progress > fadeStart) {
-      fade = Math.max(0, 1 - (progress - fadeStart) / (1 - fadeStart));
-    }
-    const slowStart = 0.72;
-    if (progress > slowStart) {
-      speed = Math.max(0.3, 1 - (progress - slowStart) / (1 - slowStart));
-    }
-    const audioLevel = audio.getLevel();
-    dancePositions = dance.getPositions(now, audioLevel, speed);
+  if (selection.length === 3) {
+    cosmos.lockSelection(selection);
+    cosmos.arrangeSelectionTriangle(
+      selection,
+      { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 },
+      78,
+      0.12
+    );
+  } else {
+    cosmos.clearLockedSelection();
+  }
 
-    if (elapsed >= SEQUENCE_DURATION) {
-      endSequence();
+  ctx.save();
+  ctx.translate(window.innerWidth * 0.5, window.innerHeight * 0.5);
+  ctx.scale(cameraZoom, cameraZoom);
+  ctx.translate(-window.innerWidth * 0.5, -window.innerHeight * 0.5);
+
+  tapWaves = tapWaves.filter((wave) => now - wave.start < 1000);
+  tapWaves.forEach((wave) => {
+    const progress = Math.min(1, (now - wave.start) / 1000);
+    const radius = 30 + progress * 180;
+    ctx.save();
+    ctx.globalAlpha = (1 - progress) * 0.35;
+    ctx.strokeStyle = "rgba(167, 139, 250, 0.8)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(wave.x, wave.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  const touchingPairs = cosmos.getTouchingPairs();
+  if (selection.length < 3) {
+    linkedPairs = mergeLinkedPairs(linkedPairs, touchingPairs);
+    if (!lockedPair && touchingPairs.length) {
+      lockedPair = touchingPairs[0];
+    }
+    const touchingTriangle = findTriangleFromPair(touchingPairs, lockedPair);
+    if (touchingTriangle.length !== selection.length || touchingTriangle.some((emoji) => !selection.includes(emoji))) {
+      updateSelection(touchingTriangle);
     }
   }
 
   cosmos.drawEmojis(ctx, {
     selection,
-    dancePositions,
-    fadeOthers: selection.length > 0,
-    fade
+    dancePositions: null,
+    fade: 1,
+    pairs: linkedPairs,
+    highlightPairs: lockedPair ? [lockedPair] : [],
+    hideOthers: selection.length === 3
   });
+
+  ctx.restore();
 
   requestAnimationFrame(tick);
 }
