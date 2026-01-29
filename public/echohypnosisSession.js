@@ -90,31 +90,6 @@ function computeBands(data) {
   return bands;
 }
 
-function createEmojiTexture(emoji, tint) {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 10, size / 2, size / 2, size / 2);
-  const base = tint.clone().offsetHSL(0, 0, 0.1).getStyle();
-  gradient.addColorStop(0, "rgba(255,255,255,0.9)");
-  gradient.addColorStop(0.5, base);
-  gradient.addColorStop(1, "rgba(5,7,15,0.1)");
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.font = "140px serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(255,255,255,0.98)";
-  ctx.shadowColor = "rgba(0,0,0,0.35)";
-  ctx.shadowBlur = 12;
-  ctx.fillText(emoji, size / 2, size / 2 + 6);
-  return new THREE.CanvasTexture(canvas);
-}
-
 function createStarfield(rng, count = 400) {
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(count * 3);
@@ -168,6 +143,78 @@ function createPointCloud(rng, count = 900) {
   const points = new THREE.Points(geometry, material);
   points.userData = { velocities, baseOpacity: 0.6 };
   return points;
+}
+
+function createNebulaLayer(
+  rng,
+  { count = 1600, radius = 5.5, thickness = 1.4, color, opacity = 0.45 } = {}
+) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const basePositions = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+  const colors = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i += 1) {
+    const idx = i * 3;
+    const x = (rng() - 0.5) * radius * 2;
+    const y = (rng() - 0.5) * radius * 1.2;
+    const z = (rng() - 0.5) * thickness;
+    positions[idx] = x;
+    positions[idx + 1] = y;
+    positions[idx + 2] = z;
+    basePositions[idx] = x;
+    basePositions[idx + 1] = y;
+    basePositions[idx + 2] = z;
+    phases[i] = rng() * Math.PI * 2;
+
+    const tint = color.clone().offsetHSL((rng() - 0.5) * 0.06, (rng() - 0.5) * 0.1, (rng() - 0.5) * 0.18);
+    colors[idx] = tint.r;
+    colors[idx + 1] = tint.g;
+    colors[idx + 2] = tint.b;
+  }
+
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.PointsMaterial({
+    size: 0.06,
+    vertexColors: true,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const points = new THREE.Points(geometry, material);
+  points.userData = {
+    basePositions,
+    phases,
+    drift: 0.18 + rng() * 0.25,
+    floatStrength: 0.18 + rng() * 0.2,
+    baseOpacity: opacity
+  };
+  return points;
+}
+
+function createNebulaField(rng, profile) {
+  const group = new THREE.Group();
+  const layerCount = 4;
+  const baseHue = 0.58 - profile.warmth * 0.2;
+  const baseCount = 1400 + Math.floor(profile.density * 800);
+
+  for (let i = 0; i < layerCount; i += 1) {
+    const color = new THREE.Color().setHSL(baseHue + i * 0.08, 0.65, 0.6);
+    const layer = createNebulaLayer(rng, {
+      count: baseCount + i * 220,
+      radius: 4.8 + i * 1.2 + profile.dispersion * 2,
+      thickness: 1.1 + profile.dispersion * 1.6,
+      color,
+      opacity: 0.35 + i * 0.05
+    });
+    layer.position.z = (i - (layerCount - 1) / 2) * 1.4;
+    group.add(layer);
+  }
+
+  return group;
 }
 
 export async function startEchohypnosisSession(
@@ -249,95 +296,8 @@ export async function startEchohypnosisSession(
   const pointCloud = createPointCloud(rng);
   scene.add(pointCloud);
 
-  const cluster = new THREE.Group();
-  scene.add(cluster);
-
-  const emojiGroup = new THREE.Group();
-  scene.add(emojiGroup);
-
-  const ringGroup = new THREE.Group();
-  scene.add(ringGroup);
-
-  const baseColor = new THREE.Color().setHSL(0.6 - profile.warmth * 0.3, 0.55, 0.6);
-  const glowColor = new THREE.Color().setHSL(0.08 + profile.warmth * 0.15, 0.7, 0.65);
-
-  const organicCount = Math.floor(18 + profile.density * 30);
-  const organicMeshes = [];
-  for (let i = 0; i < organicCount; i += 1) {
-    const geometry = new THREE.IcosahedronGeometry(0.22 + rng() * 0.35, 0);
-    const material = new THREE.MeshStandardMaterial({
-      color: baseColor.clone().offsetHSL(rng() * 0.08, 0, 0.1),
-      roughness: 0.45,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.65
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    const radius = 1.6 + rng() * 3.4 + profile.dispersion * 2.2;
-    const angle = rng() * Math.PI * 2;
-    mesh.position.set(Math.cos(angle) * radius, (rng() - 0.5) * 2.4, Math.sin(angle) * radius);
-    mesh.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
-    mesh.userData = {
-      spin: new THREE.Vector3((rng() - 0.5) * 0.003, (rng() - 0.5) * 0.004, (rng() - 0.5) * 0.003),
-      drift: new THREE.Vector3((rng() - 0.5) * 0.002, (rng() - 0.5) * 0.0015, (rng() - 0.5) * 0.002),
-      baseScale: 0.85 + rng() * 0.6
-    };
-    cluster.add(mesh);
-    organicMeshes.push(mesh);
-  }
-
-  const activeEmojis = emojis.length ? emojis.slice(0, 3) : ["✨"];
-  activeEmojis.forEach((emoji, index) => {
-    const tint = glowColor.clone().offsetHSL(index * 0.08, 0, 0.1);
-    const texture = createEmojiTexture(emoji, tint);
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false })
-    );
-    sprite.scale.set(0.9, 0.9, 1);
-
-    const bubble = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34, 32, 32),
-      new THREE.MeshStandardMaterial({
-        color: tint,
-        emissive: tint,
-        emissiveIntensity: 0.3,
-        transparent: true,
-        opacity: 0.25,
-        roughness: 0.1,
-        metalness: 0.2
-      })
-    );
-
-    const node = new THREE.Group();
-    node.add(bubble);
-    node.add(sprite);
-    node.userData = {
-      emoji,
-      orbitRadius: activeEmojis.length === 1 ? 0 : 1.8 + rng() * 1.4,
-      orbitOffset: rng() * Math.PI * 2,
-      orbitSpeed: activeEmojis.length === 1 ? 0 : 0.15 + rng() * 0.2,
-      floatOffset: rng() * Math.PI * 2,
-      baseY: activeEmojis.length === 1 ? 0 : (rng() - 0.5) * 0.8,
-      baseScale: 0.85 + rng() * 0.25
-    };
-    emojiGroup.add(node);
-  });
-
-  const ringCount = 3;
-  for (let i = 0; i < ringCount; i += 1) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(2.6 + i * 0.65, 0.04, 12, 90),
-      new THREE.MeshBasicMaterial({
-        color: glowColor.clone().offsetHSL(i * 0.04, 0, 0.1),
-        transparent: true,
-        opacity: 0.25,
-        blending: THREE.AdditiveBlending
-      })
-    );
-    ring.rotation.set(Math.PI / 2, rng() * Math.PI, rng() * Math.PI);
-    ring.userData = { spin: 0.0006 + rng() * 0.0008, pulse: 1 + rng() * 0.2 };
-    ringGroup.add(ring);
-  }
+  const nebulaField = createNebulaField(rng, profile);
+  scene.add(nebulaField);
 
   const musicData = new Uint8Array(musicAnalyser.frequencyBinCount);
   const voiceData = new Uint8Array(voiceAnalyser.frequencyBinCount);
@@ -439,39 +399,24 @@ export async function startEchohypnosisSession(
     pointCloud.material.opacity = pointCloud.userData.baseOpacity + bass * 0.25 + high * 0.1;
     pointCloud.rotation.y += 0.0006 + mid * 0.0008;
 
-    cluster.rotation.y += 0.0014 + profile.orbit * 0.0015 + bass * 0.003;
-    cluster.rotation.x += 0.0006 + mid * 0.0015;
+    nebulaField.rotation.y += 0.0008 + profile.orbit * 0.001;
+    nebulaField.rotation.x += 0.0003 + mid * 0.0009;
 
-    organicMeshes.forEach((mesh) => {
-      mesh.rotation.x += mesh.userData.spin.x * (1 + mid);
-      mesh.rotation.y += mesh.userData.spin.y * (1 + high);
-      mesh.rotation.z += mesh.userData.spin.z * (1 + mid);
-
-      mesh.position.addScaledVector(mesh.userData.drift, 1 + profile.drift);
-      const scale = mesh.userData.baseScale + bass * 0.5 + high * 0.2;
-      mesh.scale.setScalar(scale);
-      mesh.material.opacity = 0.2 + bass * 0.4 + high * 0.2;
-    });
-
-    emojiGroup.children.forEach((node) => {
-      const { orbitRadius, orbitOffset, orbitSpeed, floatOffset, baseY, baseScale } = node.userData;
-      const angle = time * orbitSpeed + orbitOffset;
-      const bob = Math.sin(time * 0.9 + floatOffset) * (orbitRadius === 0 ? 0.18 : 0.35);
-      node.position.set(Math.cos(angle) * orbitRadius, baseY + bob, Math.sin(angle) * orbitRadius);
-      const pulse = 1 + bass * 0.7 + mid * 0.35;
-      node.scale.setScalar(baseScale * pulse);
-      node.children.forEach((child) => {
-        if (child.material) {
-          child.material.opacity = 0.2 + bass * 0.4 + high * 0.2;
-        }
-      });
-    });
-
-    ringGroup.children.forEach((ring, index) => {
-      ring.rotation.z += ring.userData.spin + index * 0.0002;
-      const pulse = 1 + bass * 0.6 + mid * 0.3;
-      ring.scale.setScalar(ring.userData.pulse * pulse);
-      ring.material.opacity = 0.15 + bass * 0.35 + high * 0.15;
+    nebulaField.children.forEach((layer) => {
+      const positions = layer.geometry.attributes.position.array;
+      const { basePositions, phases, drift, floatStrength, baseOpacity } = layer.userData;
+      for (let i = 0; i < phases.length; i += 1) {
+        const idx = i * 3;
+        const phase = phases[i];
+        const wave = Math.sin(time * drift + phase) * (floatStrength + high * 0.7);
+        const swirl = Math.cos(time * 0.6 + phase) * (0.22 + bass * 0.5);
+        const depthPulse = Math.sin(time * 0.4 + phase) * (0.18 + mid * 0.45);
+        positions[idx] = basePositions[idx] + swirl;
+        positions[idx + 1] = basePositions[idx + 1] + wave;
+        positions[idx + 2] = basePositions[idx + 2] + depthPulse;
+      }
+      layer.geometry.attributes.position.needsUpdate = true;
+      layer.material.opacity = baseOpacity + bass * 0.2 + high * 0.2;
     });
 
     starfield.rotation.y += 0.0003 + high * 0.0006;
