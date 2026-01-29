@@ -24,6 +24,7 @@ export function createCosmos({ emojis, getBounds }) {
     createStar(window.innerWidth, window.innerHeight)
   );
   let selection = [];
+  let lockedSelection = new Set();
   let width = window.innerWidth;
   let height = window.innerHeight;
 
@@ -45,6 +46,7 @@ export function createCosmos({ emojis, getBounds }) {
 
   function update(dt, now) {
     nodes.forEach((node) => {
+      if (lockedSelection.has(node.emoji)) return;
       node.x += node.vx * dt;
       node.y += node.vy * dt;
       const padding = 30;
@@ -238,8 +240,22 @@ export function createCosmos({ emojis, getBounds }) {
     selection = [];
   }
 
+  function lockSelection(selected) {
+    lockedSelection = new Set(selected);
+    lockedSelection.forEach((emoji) => {
+      const node = nodes.find((item) => item.emoji === emoji);
+      if (!node) return;
+      node.vx = 0;
+      node.vy = 0;
+    });
+  }
+
+  function clearLockedSelection() {
+    lockedSelection = new Set();
+  }
+
   function applyResonance(x, y) {
-    const closest = getClosestEmoji(x, y);
+    const closest = getClosestEmoji(x, y, lockedSelection);
     if (!closest) return;
     const node = nodes.find((item) => item.emoji === closest);
     if (!node) return;
@@ -252,10 +268,11 @@ export function createCosmos({ emojis, getBounds }) {
     node.vy += (dy / dist) * boost;
   }
 
-  function getClosestEmoji(x, y) {
+  function getClosestEmoji(x, y, exclude = new Set()) {
     let closest = null;
     let closestDist = Infinity;
     nodes.forEach((node) => {
+      if (exclude.has(node.emoji)) return;
       const dist = Math.hypot(node.x - x, node.y - y);
       if (dist < closestDist) {
         closestDist = dist;
@@ -313,6 +330,8 @@ export function createCosmos({ emojis, getBounds }) {
     setSelection,
     clearSelection,
     moveSelectionToward,
+    lockSelection,
+    clearLockedSelection,
     applyResonance,
     getClosestEmoji,
     getTouchingPairs,

@@ -67,6 +67,7 @@ function findTriangleFromPair(pairs, pair) {
 }
 
 function handlePointer(event) {
+  if (selection.length === 3) return;
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
@@ -95,7 +96,10 @@ function tick(now) {
   cameraZoom += (targetZoom - cameraZoom) * 0.08;
 
   if (selection.length === 3) {
+    cosmos.lockSelection(selection);
     cosmos.moveSelectionToward(selection, { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 }, 0.07);
+  } else {
+    cosmos.clearLockedSelection();
   }
 
   ctx.save();
