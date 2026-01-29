@@ -97,7 +97,12 @@ function tick(now) {
 
   if (selection.length === 3) {
     cosmos.lockSelection(selection);
-    cosmos.moveSelectionToward(selection, { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 }, 0.07);
+    cosmos.arrangeSelectionTriangle(
+      selection,
+      { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 },
+      78,
+      0.12
+    );
   } else {
     cosmos.clearLockedSelection();
   }
@@ -138,7 +143,8 @@ function tick(now) {
     dancePositions: null,
     fade: 1,
     pairs: linkedPairs,
-    highlightPairs: lockedPair ? [lockedPair] : []
+    highlightPairs: lockedPair ? [lockedPair] : [],
+    hideOthers: selection.length === 3
   });
 
   ctx.restore();

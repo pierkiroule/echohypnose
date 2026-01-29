@@ -107,12 +107,14 @@ export function createCosmos({ emojis, getBounds }) {
     dancePositions,
     fade = 1,
     pairs = [],
-    highlightPairs = []
+    highlightPairs = [],
+    hideOthers = false
   }) {
     const selectedSet = new Set(selectedEmojis);
 
     nodes.forEach((node) => {
       if (selectedSet.has(node.emoji)) return;
+      if (hideOthers) return;
       drawEmoji(ctx, node, {
         selected: false,
         faded: false,
@@ -232,6 +234,21 @@ export function createCosmos({ emojis, getBounds }) {
     });
   }
 
+  function arrangeSelectionTriangle(selected, center, radius = 70, strength = 0.12) {
+    if (selected.length !== 3) return;
+    const angles = [-Math.PI / 2, (Math.PI * 1) / 6, (Math.PI * 5) / 6];
+    selected.forEach((emoji, index) => {
+      const node = nodes.find((item) => item.emoji === emoji);
+      if (!node) return;
+      const target = {
+        x: center.x + Math.cos(angles[index]) * radius,
+        y: center.y + Math.sin(angles[index]) * radius
+      };
+      node.x += (target.x - node.x) * strength;
+      node.y += (target.y - node.y) * strength;
+    });
+  }
+
   function setSelection(nextSelection) {
     selection = nextSelection;
   }
@@ -330,6 +347,7 @@ export function createCosmos({ emojis, getBounds }) {
     setSelection,
     clearSelection,
     moveSelectionToward,
+    arrangeSelectionTriangle,
     lockSelection,
     clearLockedSelection,
     applyResonance,
