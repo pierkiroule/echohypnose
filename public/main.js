@@ -189,7 +189,7 @@ function tick(now) {
     selection,
     dancePositions: null,
     fade: 1,
-    hideOthers: false,
+    hideOthers: selection.length === 3,
     showNetwork
   });
 
