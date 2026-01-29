@@ -19,6 +19,7 @@ let selection = [];
 let lockedPair = null;
 let linkedPairs = [];
 let tapWaves = [];
+let cameraZoom = 1;
 let lastTime = performance.now();
 
 function resize() {
@@ -90,6 +91,18 @@ function tick(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   cosmos.drawBackground(ctx);
 
+  const targetZoom = selection.length === 3 ? 1.35 : 1;
+  cameraZoom += (targetZoom - cameraZoom) * 0.08;
+
+  if (selection.length === 3) {
+    cosmos.moveSelectionToward(selection, { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 }, 0.07);
+  }
+
+  ctx.save();
+  ctx.translate(window.innerWidth * 0.5, window.innerHeight * 0.5);
+  ctx.scale(cameraZoom, cameraZoom);
+  ctx.translate(-window.innerWidth * 0.5, -window.innerHeight * 0.5);
+
   tapWaves = tapWaves.filter((wave) => now - wave.start < 1000);
   tapWaves.forEach((wave) => {
     const progress = Math.min(1, (now - wave.start) / 1000);
@@ -123,6 +136,8 @@ function tick(now) {
     pairs: linkedPairs,
     highlightPairs: lockedPair ? [lockedPair] : []
   });
+
+  ctx.restore();
 
   requestAnimationFrame(tick);
 }

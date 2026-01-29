@@ -205,6 +205,31 @@ export function createCosmos({ emojis, getBounds }) {
     });
   }
 
+  function moveSelectionToward(selected, target, strength = 0.08) {
+    if (!selected.length) return;
+    const positions = getSelectionPositions(selected);
+    const centroid = positions.reduce(
+      (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
+      { x: 0, y: 0 }
+    );
+    centroid.x /= positions.length;
+    centroid.y /= positions.length;
+    const offset = {
+      x: target.x - centroid.x,
+      y: target.y - centroid.y
+    };
+    selected.forEach((emoji, index) => {
+      const node = nodes.find((item) => item.emoji === emoji);
+      if (!node) return;
+      const desired = {
+        x: positions[index].x + offset.x,
+        y: positions[index].y + offset.y
+      };
+      node.x += (desired.x - node.x) * strength;
+      node.y += (desired.y - node.y) * strength;
+    });
+  }
+
   function setSelection(nextSelection) {
     selection = nextSelection;
   }
@@ -287,6 +312,7 @@ export function createCosmos({ emojis, getBounds }) {
     toWorldPoint,
     setSelection,
     clearSelection,
+    moveSelectionToward,
     applyResonance,
     getClosestEmoji,
     getTouchingPairs,
