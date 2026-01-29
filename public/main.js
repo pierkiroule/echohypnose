@@ -46,6 +46,9 @@ function resize() {
 function updateSelection(newSelection) {
   selection = newSelection;
   cosmos.setSelection(selection);
+  if (!selectionLocked) {
+    showNetwork = selection.length !== 3;
+  }
   renderSelectionLine();
   if (selection.length === 3) {
     activateSession();
