@@ -1,8 +1,13 @@
 import { createCosmos } from "./cosmos.js";
+import { startEchohypnosisSession } from "./echohypnosisSession.js";
 
 const EMOJIS = ["🌊", "🌫️", "✨", "🌑", "🎐", "🪵", "🕯️", "🧿", "🪐", "🌌", "🪷"];
 const root = document.getElementById("ui-root");
-root.innerHTML = `<div class="instruction">Tape pour faire vibrer les émojis jusqu'au triangle</div>`;
+root.innerHTML = `<div class="instruction">Choisis trois émojis dans la constellation</div>`;
+
+const selectionLine = document.createElement("div");
+selectionLine.className = "selection-line";
+document.body.appendChild(selectionLine);
 
 const canvas = document.createElement("canvas");
 canvas.className = "cosmos";
@@ -16,11 +21,11 @@ const cosmos = createCosmos({
 });
 
 let selection = [];
-let lockedPair = null;
-let linkedPairs = [];
 let tapWaves = [];
 let cameraZoom = 1;
 let lastTime = performance.now();
+let session = null;
+let selectionLocked = false;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -35,42 +40,61 @@ function resize() {
 function updateSelection(newSelection) {
   selection = newSelection;
   cosmos.setSelection(selection);
+  renderSelectionLine();
+  if (selection.length === 3) {
+    activateSession();
+  }
 }
 
-function pairKey(pair) {
-  return pair.slice().sort().join("|");
+function renderSelectionLine() {
+  selectionLine.innerHTML = "";
+  for (let i = 0; i < 3; i += 1) {
+    const slot = document.createElement("span");
+    slot.className = "selection-slot";
+    if (selection[i]) {
+      slot.classList.add("filled");
+      slot.textContent = selection[i];
+    } else {
+      slot.textContent = "·";
+    }
+    selectionLine.appendChild(slot);
+  }
 }
 
-function mergeLinkedPairs(pairs, nextPairs) {
-  const nextSet = new Set(pairs.map((pair) => pairKey(pair)));
-  nextPairs.forEach((pair) => {
-    const key = pairKey(pair);
-    if (!nextSet.has(key)) {
-      nextSet.add(key);
-      pairs.push(pair);
+async function activateSession() {
+  if (session || selection.length !== 3) return;
+  selectionLocked = true;
+  document.body.classList.add("sequence-active");
+  session = await startEchohypnosisSession(selection, {
+    onStop: () => {
+      session = null;
+      selectionLocked = false;
+      document.body.classList.remove("sequence-active");
     }
   });
-  return pairs;
 }
 
-function findTriangleFromPair(pairs, pair) {
-  if (!pair) return [];
-  const [a, b] = pair;
-  for (let i = 0; i < pairs.length; i += 1) {
-    const [p1, p2] = pairs[i];
-    if (p1 === a && p2 !== b) return [a, b, p2];
-    if (p2 === a && p1 !== b) return [a, b, p1];
-    if (p1 === b && p2 !== a) return [a, b, p2];
-    if (p2 === b && p1 !== a) return [a, b, p1];
+function toggleEmojiSelection(emoji) {
+  if (selectionLocked) return;
+  const index = selection.indexOf(emoji);
+  if (index > -1) {
+    const next = [...selection.slice(0, index), ...selection.slice(index + 1)];
+    updateSelection(next);
+    return;
   }
-  return [];
+  if (selection.length >= 3) return;
+  updateSelection([...selection, emoji]);
 }
 
 function handlePointer(event) {
-  if (selection.length === 3) return;
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
+  const hit = cosmos.hitTest(x, y);
+  if (hit) {
+    toggleEmojiSelection(hit);
+    return;
+  }
   const tapPoint = cosmos.toWorldPoint(x, y);
   cosmos.applyResonance(tapPoint.x, tapPoint.y);
   tapWaves.push({ x: tapPoint.x, y: tapPoint.y, start: performance.now() });
@@ -97,12 +121,6 @@ function tick(now) {
 
   if (selection.length === 3) {
     cosmos.lockSelection(selection);
-    cosmos.arrangeSelectionTriangle(
-      selection,
-      { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 },
-      78,
-      0.12
-    );
   } else {
     cosmos.clearLockedSelection();
   }
@@ -126,25 +144,11 @@ function tick(now) {
     ctx.restore();
   });
 
-  const touchingPairs = cosmos.getTouchingPairs();
-  if (selection.length < 3) {
-    linkedPairs = mergeLinkedPairs(linkedPairs, touchingPairs);
-    if (!lockedPair && touchingPairs.length) {
-      lockedPair = touchingPairs[0];
-    }
-    const touchingTriangle = findTriangleFromPair(touchingPairs, lockedPair);
-    if (touchingTriangle.length !== selection.length || touchingTriangle.some((emoji) => !selection.includes(emoji))) {
-      updateSelection(touchingTriangle);
-    }
-  }
-
   cosmos.drawEmojis(ctx, {
     selection,
     dancePositions: null,
     fade: 1,
-    pairs: linkedPairs,
-    highlightPairs: lockedPair ? [lockedPair] : [],
-    hideOthers: selection.length === 3
+    hideOthers: false
   });
 
   ctx.restore();
@@ -156,4 +160,5 @@ canvas.addEventListener("pointerdown", handlePointer);
 canvas.addEventListener("touchstart", handleTouch, { passive: false });
 window.addEventListener("resize", resize);
 resize();
+renderSelectionLine();
 requestAnimationFrame(tick);

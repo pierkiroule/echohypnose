@@ -23,6 +23,7 @@ export function createCosmos({ emojis, getBounds }) {
   let stars = Array.from({ length: STAR_COUNT }, () =>
     createStar(window.innerWidth, window.innerHeight)
   );
+  let networkEdges = [];
   let selection = [];
   let lockedSelection = new Set();
   let particles = [];
@@ -44,6 +45,29 @@ export function createCosmos({ emojis, getBounds }) {
     height = nextHeight;
     stars = Array.from({ length: STAR_COUNT }, () => createStar(width, height));
   }
+
+  function buildNetworkEdges() {
+    const edges = new Set();
+    nodes.forEach((node) => {
+      const neighbors = nodes
+        .filter((candidate) => candidate !== node)
+        .map((candidate) => ({
+          emoji: candidate.emoji,
+          dist: Math.hypot(node.x - candidate.x, node.y - candidate.y)
+        }))
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, 2);
+      neighbors.forEach((neighbor) => {
+        const key = node.emoji < neighbor.emoji
+          ? `${node.emoji}|${neighbor.emoji}`
+          : `${neighbor.emoji}|${node.emoji}`;
+        edges.add(key);
+      });
+    });
+    networkEdges = [...edges].map((key) => key.split("|"));
+  }
+
+  buildNetworkEdges();
 
   function update(dt, now) {
     nodes.forEach((node) => {
@@ -155,6 +179,22 @@ export function createCosmos({ emojis, getBounds }) {
       ctx.restore();
     }
 
+    if (networkEdges.length) {
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(148, 163, 184, ${0.3 * fade})`;
+      networkEdges.forEach(([aEmoji, bEmoji]) => {
+        const a = nodes.find((item) => item.emoji === aEmoji);
+        const b = nodes.find((item) => item.emoji === bEmoji);
+        if (!a || !b) return;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     nodes.forEach((node) => {
       if (selectedSet.has(node.emoji)) return;
       if (hideOthers) return;
@@ -212,24 +252,6 @@ export function createCosmos({ emojis, getBounds }) {
         ctx.stroke();
       });
       ctx.restore();
-    }
-
-    if (selectedEmojis.length === 3) {
-      const selectedNodes = selectedEmojis
-        .map((emoji) => nodes.find((item) => item.emoji === emoji))
-        .filter(Boolean);
-      if (selectedNodes.length === 3) {
-        ctx.save();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = `rgba(129, 140, 248, ${0.7 * fade})`;
-        ctx.beginPath();
-        ctx.moveTo(selectedNodes[0].x, selectedNodes[0].y);
-        ctx.lineTo(selectedNodes[1].x, selectedNodes[1].y);
-        ctx.lineTo(selectedNodes[2].x, selectedNodes[2].y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-      }
     }
   }
 
