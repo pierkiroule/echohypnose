@@ -29,6 +29,7 @@ export function createCosmos({ emojis, getBounds }) {
   let particles = [];
   let width = window.innerWidth;
   let height = window.innerHeight;
+  let boundaryPadding = Math.min(width, height) * 0.18 + 40;
 
   function toWorldPoint(x, y) {
     const bounds = getBounds();
@@ -43,7 +44,12 @@ export function createCosmos({ emojis, getBounds }) {
   function resize(nextWidth, nextHeight) {
     width = nextWidth;
     height = nextHeight;
+    boundaryPadding = Math.min(width, height) * 0.18 + 40;
     stars = Array.from({ length: STAR_COUNT }, () => createStar(width, height));
+  }
+
+  function getSafePadding() {
+    return Math.min(boundaryPadding, width * 0.35, height * 0.35);
   }
 
   function buildNetworkEdges() {
@@ -68,17 +74,26 @@ export function createCosmos({ emojis, getBounds }) {
   }
 
   buildNetworkEdges();
+  nodes.forEach((node) => {
+    const safePadding = getSafePadding();
+    node.x = safePadding + Math.random() * (width - safePadding * 2);
+    node.y = safePadding + Math.random() * (height - safePadding * 2);
+  });
 
   function update(dt, now) {
+    const centerX = width * 0.5;
+    const centerY = height * 0.5;
+    const safePadding = getSafePadding();
     nodes.forEach((node) => {
       if (lockedSelection.has(node.emoji)) return;
+      node.vx += (centerX - node.x) * 0.002 * dt;
+      node.vy += (centerY - node.y) * 0.002 * dt;
       node.x += node.vx * dt;
       node.y += node.vy * dt;
       node.vx *= 0.97;
       node.vy *= 0.97;
-      const padding = 30;
-      if (node.x < padding || node.x > width - padding) node.vx *= -1;
-      if (node.y < padding || node.y > height - padding) node.vy *= -1;
+      if (node.x < safePadding || node.x > width - safePadding) node.vx *= -1;
+      if (node.y < safePadding || node.y > height - safePadding) node.vy *= -1;
       const drift = Math.sin(now * 0.0003 + node.driftPhase) * 6;
       node.y += drift * dt;
 
