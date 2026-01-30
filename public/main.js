@@ -26,12 +26,16 @@ let cameraZoom = 1;
 let lastTime = performance.now();
 let session = null;
 let selectionLocked = false;
+let selectionComplete = false;
+let sessionStartTimer = null;
 let tapCount = 0;
 let waveSelections = [];
 let waveActive = false;
 let waveOrigin = null;
 let waveStart = 0;
 let showNetwork = true;
+let constellationFade = 1;
+let constellationFadeTarget = 1;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -46,12 +50,30 @@ function resize() {
 function updateSelection(newSelection) {
   selection = newSelection;
   cosmos.setSelection(selection);
-  if (!selectionLocked) {
-    showNetwork = selection.length !== 3;
+  if (!session && selection.length < 3) {
+    selectionLocked = false;
+    selectionComplete = false;
+    showNetwork = true;
+    constellationFadeTarget = 1;
+    document.body.classList.remove("selection-complete");
+    if (sessionStartTimer) {
+      window.clearTimeout(sessionStartTimer);
+      sessionStartTimer = null;
+    }
   }
   renderSelectionLine();
   if (selection.length === 3) {
-    activateSession();
+    selectionComplete = true;
+    selectionLocked = true;
+    showNetwork = false;
+    constellationFadeTarget = 0;
+    document.body.classList.add("selection-complete");
+    if (!sessionStartTimer) {
+      sessionStartTimer = window.setTimeout(() => {
+        sessionStartTimer = null;
+        activateSession();
+      }, 650);
+    }
   }
 }
 
@@ -80,8 +102,11 @@ async function activateSession() {
     onStop: () => {
       session = null;
       selectionLocked = false;
+      selectionComplete = false;
       showNetwork = true;
+      constellationFadeTarget = 1;
       document.body.classList.remove("sequence-active");
+      document.body.classList.remove("selection-complete");
       tapCount = 0;
       waveSelections = [];
       waveActive = false;
@@ -154,6 +179,12 @@ function tick(now) {
 
   cosmos.update(dt, now);
 
+  const fadeStep = 0.06;
+  constellationFade += (constellationFadeTarget - constellationFade) * fadeStep;
+  if (Math.abs(constellationFade - constellationFadeTarget) < 0.01) {
+    constellationFade = constellationFadeTarget;
+  }
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   cosmos.drawBackground(ctx);
 
@@ -188,7 +219,7 @@ function tick(now) {
   cosmos.drawEmojis(ctx, {
     selection,
     dancePositions: null,
-    fade: 1,
+    fade: constellationFade,
     hideOthers: selection.length === 3,
     showNetwork
   });
